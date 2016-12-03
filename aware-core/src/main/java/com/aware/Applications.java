@@ -27,11 +27,9 @@ import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
-import android.support.v4.accessibilityservice.AccessibilityServiceInfoCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.view.accessibility.AccessibilityEventCompat;
 import android.support.v4.view.accessibility.AccessibilityManagerCompat;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
@@ -263,8 +261,8 @@ public class Applications extends AccessibilityService {
             keyboard.put(Keyboard_Provider.Keyboard_Data.TIMESTAMP, System.currentTimeMillis());
             keyboard.put(Keyboard_Provider.Keyboard_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
             keyboard.put(Keyboard_Provider.Keyboard_Data.PACKAGE_NAME, (String) event.getPackageName());
-            keyboard.put(Keyboard_Provider.Keyboard_Data.BEFORE_TEXT, (String) event.getBeforeText());
-            keyboard.put(Keyboard_Provider.Keyboard_Data.CURRENT_TEXT, event.getText().toString());
+            keyboard.put(Keyboard_Provider.Keyboard_Data.BEFORE_TEXT, obfuscateText((String) event.getBeforeText()));
+            keyboard.put(Keyboard_Provider.Keyboard_Data.CURRENT_TEXT, obfuscateText(event.getText().toString()));
             keyboard.put(Keyboard_Provider.Keyboard_Data.IS_PASSWORD, event.isPassword());
 
             getContentResolver().insert(Keyboard_Provider.Keyboard_Data.CONTENT_URI, keyboard);
@@ -274,6 +272,13 @@ public class Applications extends AccessibilityService {
             Intent keyboard_data = new Intent(Keyboard.ACTION_AWARE_KEYBOARD);
             sendBroadcast(keyboard_data);
         }
+    }
+
+//    Changes all characters in string to "*" in order to maintain privacy
+    public String obfuscateText(String text){
+        String obText="";
+        obText=text.replaceAll("(?s).", "*");
+        return obText;
     }
 
     @Override
