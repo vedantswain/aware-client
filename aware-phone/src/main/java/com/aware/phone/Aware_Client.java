@@ -6,7 +6,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.bluetooth.BluetoothAdapter;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -30,7 +29,6 @@ import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.support.design.widget.Snackbar;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -43,7 +41,6 @@ import com.aware.Aware;
 import com.aware.Aware_Preferences;
 import com.aware.phone.ui.Aware_Activity;
 import com.aware.phone.ui.Aware_Join_Study;
-import com.aware.providers.Aware_Provider;
 import com.aware.ui.PermissionsHandler;
 import com.aware.utils.Https;
 import com.aware.utils.SSLManager;
@@ -1897,7 +1894,10 @@ public class Aware_Client extends Aware_Activity {
         if (Aware.isStudy(awareContext)) webservice_wifi_only.setSelectable(false);
 
         final CheckBoxPreference webservice_charging = (CheckBoxPreference) findPreference(Aware_Preferences.WEBSERVICE_CHARGING);
-        webservice_charging.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_CHARGING).equals("true"));
+//        webservice_charging.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_CHARGING).equals("true"));
+
+//        Only sync to server when charging
+        webservice_charging.setChecked(true);
         webservice_charging.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
@@ -2186,7 +2186,10 @@ public class Aware_Client extends Aware_Activity {
         if (Aware.isStudy(awareContext)) webservice_remove_data.setSelectable(false);
 
         final CheckBoxPreference webservice_silent = (CheckBoxPreference) findPreference(Aware_Preferences.WEBSERVICE_SILENT);
-        webservice_silent.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_SILENT).equals("true"));
+//        webservice_silent.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_SILENT).equals("true"));
+
+//        Don't show notifications while syncing
+        webservice_silent.setChecked(true);
         webservice_silent.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
