@@ -1894,10 +1894,8 @@ public class Aware_Client extends Aware_Activity {
         if (Aware.isStudy(awareContext)) webservice_wifi_only.setSelectable(false);
 
         final CheckBoxPreference webservice_charging = (CheckBoxPreference) findPreference(Aware_Preferences.WEBSERVICE_CHARGING);
-//        webservice_charging.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_CHARGING).equals("true"));
+        webservice_charging.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_CHARGING).equals("true"));
 
-//        Only sync to server when charging
-        webservice_charging.setChecked(true);
         webservice_charging.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
@@ -2186,10 +2184,8 @@ public class Aware_Client extends Aware_Activity {
         if (Aware.isStudy(awareContext)) webservice_remove_data.setSelectable(false);
 
         final CheckBoxPreference webservice_silent = (CheckBoxPreference) findPreference(Aware_Preferences.WEBSERVICE_SILENT);
-//        webservice_silent.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_SILENT).equals("true"));
+        webservice_silent.setChecked(Aware.getSetting(awareContext, Aware_Preferences.WEBSERVICE_SILENT).equals("true"));
 
-//        Don't show notifications while syncing
-        webservice_silent.setChecked(true);
         webservice_silent.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {

@@ -274,10 +274,10 @@ public class Applications extends AccessibilityService {
         }
     }
 
-//    Changes all characters in string to "*" in order to maintain privacy
+//    Records string length instead of characters in the string in order to maintain privacy
     public String obfuscateText(String text){
         String obText="";
-        obText=text.replaceAll("(?s).", "*");
+        obText= String.valueOf(text.length());
         return obText;
     }
 
