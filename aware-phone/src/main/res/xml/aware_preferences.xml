@@ -819,7 +819,7 @@
                 android:title="Wi-Fi only" />
 
             <CheckBoxPreference
-                android:defaultValue="false"
+                android:defaultValue="true"
                 android:key="webservice_charging"
                 android:persistent="true"
                 android:summary="Sync only while charging"
@@ -894,7 +894,7 @@
                 android:title="Remove all data once uploaded" />
 
             <CheckBoxPreference
-                android:defaultValue="false"
+                android:defaultValue="true"
                 android:key="webservice_silent"
                 android:persistent="true"
                 android:summary="Don't show a notification every time data uploaded"

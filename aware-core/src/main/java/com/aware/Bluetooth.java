@@ -247,7 +247,9 @@ public class Bluetooth extends Aware_Sensor {
                 rowData.put(Bluetooth_Data.DEVICE_ID, Aware.getSetting(context, Aware_Preferences.DEVICE_ID));
                 rowData.put(Bluetooth_Data.TIMESTAMP, System.currentTimeMillis());
                 rowData.put(Bluetooth_Data.BT_ADDRESS, btDevice.getAddress());
-                rowData.put(Bluetooth_Data.BT_NAME, ((btDevice.getName()!=null)?btDevice.getName():""));
+//                rowData.put(Bluetooth_Data.BT_NAME, ((btDevice.getName()!=null)?btDevice.getName():""));
+//                Not recording device name
+                rowData.put(Bluetooth_Data.BT_NAME,"*");
                 rowData.put(Bluetooth_Data.BT_RSSI, btDeviceRSSI);
                 rowData.put(Bluetooth_Data.BT_LABEL, scanTimestamp);
 
@@ -290,6 +292,7 @@ public class Bluetooth extends Aware_Sensor {
         }
 
 //        private void resetBluetooth() {
+//                if (Aware.DEBUG) Log.d(TAG, "Bluetooth is being reset...");
 //            if(!wasBTEnabled){
 //                bluetoothAdapter.disable();
 //                if (Aware.DEBUG) Log.d(TAG, "Bluetooth is turned off after scan...");
