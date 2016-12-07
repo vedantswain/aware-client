@@ -91,8 +91,6 @@ public class Bluetooth extends Aware_Sensor {
     private static NotificationManager notificationManager = null;
     private static Intent enableBT = null;
 
-//    Record the user's bluetooth state before device discovery was started by aware
-//    private static Boolean wasBTEnabled;
 
     /**
      * Get an instance for the Bluetooth Service
@@ -273,8 +271,6 @@ public class Bluetooth extends Aware_Sensor {
                 if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_BLUETOOTH_SCAN_ENDED);
                 Intent scanEnd = new Intent(ACTION_AWARE_BLUETOOTH_SCAN_ENDED);
                 context.sendBroadcast(scanEnd);
-                if (Aware.DEBUG) Log.d(TAG, "Bluetooth is finished with scan...");
-//                resetBluetooth();
             }
 
             if (intent.getAction().equals(BluetoothAdapter.ACTION_DISCOVERY_STARTED)) {
@@ -290,14 +286,6 @@ public class Bluetooth extends Aware_Sensor {
                 context.startService(backgroundService);
             }
         }
-
-//        private void resetBluetooth() {
-//                if (Aware.DEBUG) Log.d(TAG, "Bluetooth is being reset...");
-//            if(!wasBTEnabled){
-//                bluetoothAdapter.disable();
-//                if (Aware.DEBUG) Log.d(TAG, "Bluetooth is turned off after scan...");
-//            }
-//        }
     }
 
     private static final Bluetooth_Broadcaster bluetoothMonitor = new Bluetooth_Broadcaster();
@@ -330,7 +318,6 @@ public class Bluetooth extends Aware_Sensor {
             if (intent.getAction().equals(ACTION_AWARE_BLUETOOTH_REQUEST_SCAN)) {
                 if (!bluetoothAdapter.isDiscovering()) {
                     if (bluetoothAdapter.isEnabled()) {
-//                        wasBTEnabled=true;
                         bluetoothAdapter.startDiscovery();
                     } else {
                         //Bluetooth is off
@@ -342,10 +329,6 @@ public class Bluetooth extends Aware_Sensor {
                         rowData.put(Bluetooth_Data.BT_ADDRESS, "disabled");
                         rowData.put(Bluetooth_Data.BT_LABEL, "disabled");
                         getContentResolver().insert(Bluetooth_Data.CONTENT_URI, rowData);
-//                        wasBTEnabled=false;
-//                        bluetoothAdapter.enable();
-//                        if (Aware.DEBUG) Log.d(TAG, "Bluetooth is turned on for scan...");
-//                        bluetoothAdapter.startDiscovery();
                     }
                 }
             }
