@@ -95,6 +95,7 @@ public class WiFi extends Aware_Sensor {
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
+        filter.addAction(ACTION_AWARE_WIFI_SCAN_ENDED);
         registerReceiver(wifiMonitor, filter);
 
         backgroundService = new Intent(this, BackgroundService.class);
@@ -185,6 +186,9 @@ public class WiFi extends Aware_Sensor {
                 backgroundService.setAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
                 context.startService(backgroundService);
             }
+            if (intent.getAction().equals(ACTION_AWARE_WIFI_SCAN_ENDED)){
+                if (Aware.DEBUG) Log.d(TAG, "WiFi scan ended");
+            }
         }
     }
 
@@ -235,11 +239,19 @@ public class WiFi extends Aware_Sensor {
         }
 
         @Override
+        public void onDestroy() {
+            super.onDestroy();
+            if (Aware.DEBUG) Log.d(TAG, "WiFi scan background service destroyed");
+        }
+
+        @Override
         protected void onHandleIntent(Intent intent) {
             WifiManager wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
 
             if (intent.getAction().equals(WiFi.ACTION_AWARE_WIFI_REQUEST_SCAN)) {
                 if (wifiManager.isWifiEnabled() || wifiManager.isScanAlwaysAvailable()) {
+                    if (Aware.DEBUG) Log.d(TAG, "WiFi scan started");
+
                     Intent scanStart = new Intent(ACTION_AWARE_WIFI_SCAN_STARTED);
                     sendBroadcast(scanStart);
                     wifiManager.startScan();
