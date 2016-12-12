@@ -45,6 +45,9 @@ public class WiFi extends Aware_Sensor {
     private static PendingIntent wifiScan = null;
     private static Intent backgroundService = null;
 
+    private static Boolean wasWifiEnabled;
+    private static Boolean wasWifiForced = false;
+
     /**
      * Broadcasted event: currently connected to this AP
      */
@@ -188,6 +191,17 @@ public class WiFi extends Aware_Sensor {
             }
             if (intent.getAction().equals(ACTION_AWARE_WIFI_SCAN_ENDED)){
                 if (Aware.DEBUG) Log.d(TAG, "WiFi scan ended");
+
+                try {
+                    if (!wasWifiEnabled){
+                        wifiManager.setWifiEnabled(false);
+                        wasWifiForced = false;
+                        if (Aware.DEBUG) Log.d(TAG, "WiFi is force disabled");
+                    }
+                }
+                catch (NullPointerException e){
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -252,6 +266,9 @@ public class WiFi extends Aware_Sensor {
                 if (wifiManager.isWifiEnabled() || wifiManager.isScanAlwaysAvailable()) {
                     if (Aware.DEBUG) Log.d(TAG, "WiFi scan started");
 
+                    if (!wasWifiForced)
+                        wasWifiEnabled = true;
+
                     Intent scanStart = new Intent(ACTION_AWARE_WIFI_SCAN_STARTED);
                     sendBroadcast(scanStart);
                     wifiManager.startScan();
@@ -260,12 +277,22 @@ public class WiFi extends Aware_Sensor {
                         Log.d(TAG, "WiFi is off");
                     }
 
-                    ContentValues rowData = new ContentValues();
-                    rowData.put(WiFi_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
-                    rowData.put(WiFi_Data.TIMESTAMP, System.currentTimeMillis());
-                    rowData.put(WiFi_Data.LABEL, "disabled");
+//                    ContentValues rowData = new ContentValues();
+//                    rowData.put(WiFi_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
+//                    rowData.put(WiFi_Data.TIMESTAMP, System.currentTimeMillis());
+//                    rowData.put(WiFi_Data.LABEL, "disabled");
+//
+//                    getContentResolver().insert(WiFi_Data.CONTENT_URI, rowData);
 
-                    getContentResolver().insert(WiFi_Data.CONTENT_URI, rowData);
+                    wasWifiEnabled = false;
+                    wasWifiForced = true;
+                    wifiManager.setWifiEnabled(true);
+                    if (Aware.DEBUG) Log.d(TAG, "WiFi is force enabled");
+
+                    Intent scanStart = new Intent(ACTION_AWARE_WIFI_SCAN_STARTED);
+                    sendBroadcast(scanStart);
+                    wifiManager.startScan();
+
                 }
             }
 
