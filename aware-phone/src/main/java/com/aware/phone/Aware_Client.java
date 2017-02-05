@@ -26,13 +26,8 @@ import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.support.v4.content.ContextCompat;
-<<<<<<< HEAD
-import android.view.LayoutInflater;
-import android.view.View;
-=======
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
->>>>>>> parent/development
 import android.view.ViewGroup;
 import android.widget.ListAdapter;
 import android.widget.Toast;
