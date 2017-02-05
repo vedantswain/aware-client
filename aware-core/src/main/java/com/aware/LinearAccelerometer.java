@@ -6,7 +6,6 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteException;
@@ -21,28 +20,19 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
-import com.aware.providers.Accelerometer_Provider;
+
 import com.aware.providers.Linear_Accelerometer_Provider;
 import com.aware.providers.Linear_Accelerometer_Provider.Linear_Accelerometer_Data;
 import com.aware.providers.Linear_Accelerometer_Provider.Linear_Accelerometer_Sensor;
-import com.aware.ui.PermissionsHandler;
 import com.aware.utils.Aware_Sensor;
-import com.aware.utils.Converters;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.lang.Math;
 
 /**
- * AWARE Linear-accelerometer module:
- * A three dimensional vector indicating acceleration along each device axis, not including gravity. All values have units of m/s^2. The coordinate system is the same as is used by the acceleration sensor.
- * The output of the accelerometer, gravity and linear-acceleration sensors must obey the following relation: acceleration = gravity + linear-acceleration
- * - Linear Accelerometer raw data
- * - Linear Accelerometer sensor information
- *
  * @author df
  */
 public class LinearAccelerometer extends Aware_Sensor implements SensorEventListener {
@@ -54,14 +44,13 @@ public class LinearAccelerometer extends Aware_Sensor implements SensorEventList
 
     private static SensorManager mSensorManager;
     private static Sensor mLinearAccelerator;
+
     private static HandlerThread sensorThread = null;
     private static Handler sensorHandler = null;
-    private static PowerManager powerManager = null;
     private static PowerManager.WakeLock wakeLock = null;
-//    private static int FIFO_SIZE = 0;
-    private static float LAST_VALUE_0 = 0;
-    private static float LAST_VALUE_1 = 0;
-    private static float LAST_VALUE_2 = 0;
+
+    private static Float[] LAST_VALUES = null;
+
     private static int FREQUENCY = -1;
     private static double THRESHOLD = 0;
 
@@ -102,19 +91,33 @@ public class LinearAccelerometer extends Aware_Sensor implements SensorEventList
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        // Apply threshold.  This applies to each axis independently.  We could
-        // alternatively use Euclidian distance.  If change of values is not
-        // enough, do nothing.
-        if (Math.abs(event.values[0] - LAST_VALUE_0 ) < THRESHOLD
-                && Math.abs(event.values[1] - LAST_VALUE_1) < THRESHOLD
-                && Math.abs(event.values[2] - LAST_VALUE_2) < THRESHOLD) {
+        if (SignificantMotion.isSignificantMotionActive && !SignificantMotion.CURRENT_SIGMOTION_STATE) {
+            if (data_values.size() > 0) {
+                ContentValues[] data_buffer = new ContentValues[data_values.size()];
+                data_values.toArray(data_buffer);
+                try {
+                    if (!Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("true")) {
+                        new AsyncStore().execute(data_buffer);
+                    }
+                } catch (SQLiteException e) {
+                    if (Aware.DEBUG) Log.d(TAG, e.getMessage());
+                } catch (SQLException e) {
+                    if (Aware.DEBUG) Log.d(TAG, e.getMessage());
+                }
+                data_values.clear();
+            }
+
             return;
         }
-        // Update last values with new values for the next round.
-        LAST_VALUE_0 = event.values[0];
-        LAST_VALUE_1 = event.values[1];
-        LAST_VALUE_2 = event.values[2];
-        // Proceed with saving as usual.
+
+        if (LAST_VALUES != null && THRESHOLD > 0 && Math.abs(event.values[0] - LAST_VALUES[0]) < THRESHOLD
+                && Math.abs(event.values[1] - LAST_VALUES[1]) < THRESHOLD
+                && Math.abs(event.values[2] - LAST_VALUES[2]) < THRESHOLD) {
+            return;
+        }
+
+        LAST_VALUES = new Float[]{event.values[0], event.values[1], event.values[2]};
+
         ContentValues rowData = new ContentValues();
         rowData.put(Linear_Accelerometer_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
         rowData.put(Linear_Accelerometer_Data.TIMESTAMP, System.currentTimeMillis());
@@ -212,14 +215,12 @@ public class LinearAccelerometer extends Aware_Sensor implements SensorEventList
         super.onCreate();
 
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-
         mLinearAccelerator = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-//        FIFO_SIZE = mLinearAccelerator.getFifoReservedEventCount();
 
         sensorThread = new HandlerThread(TAG);
         sensorThread.start();
 
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
         wakeLock.acquire();
 
@@ -253,51 +254,36 @@ public class LinearAccelerometer extends Aware_Sensor implements SensorEventList
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
-        boolean permissions_ok = true;
-        for (String p : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                permissions_ok = false;
-                break;
-            }
-        }
-
-        if (permissions_ok) {
-
-            if (mLinearAccelerator == null) {
-                if (Aware.DEBUG) Log.w(TAG, "This device does not have a linear-accelerometer!");
-                Aware.setSetting(this, Aware_Preferences.STATUS_LINEAR_ACCELEROMETER, false);
-                stopSelf();
-            } else {
-                DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
-                saveAccelerometerDevice(mLinearAccelerator);
-                Aware.setSetting(this, Aware_Preferences.STATUS_LINEAR_ACCELEROMETER, true);
-
-                if (Aware.getSetting(this, Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER).length() == 0) {
-                    Aware.setSetting(this, Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER, 200000);
-                }
-
-                if (Aware.getSetting(this, Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER).length() == 0) {
-                    Aware.setSetting(this, Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER, 0.0);
-                }
-
-                if (FREQUENCY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER))
-                        || THRESHOLD != Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER))) {
-                    sensorHandler.removeCallbacksAndMessages(null);
-                    mSensorManager.unregisterListener(this, mLinearAccelerator);
-//                    mSensorManager.registerListener(this, mLinearAccelerator, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER)), FIFO_SIZE, sensorHandler);
-                    mSensorManager.registerListener(this, mLinearAccelerator, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER)), sensorHandler);
-                    FREQUENCY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER));
-                    THRESHOLD = Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER));
-                }
-
-                if (Aware.DEBUG) Log.d(TAG, "Linear-accelerometer service active: " + FREQUENCY + "ms");
-            }
+        if (mLinearAccelerator == null) {
+            if (Aware.DEBUG) Log.w(TAG, "This device does not have a linear-accelerometer!");
+            Aware.setSetting(this, Aware_Preferences.STATUS_LINEAR_ACCELEROMETER, false);
+            stopSelf();
         } else {
-            Intent permissions = new Intent(this, PermissionsHandler.class);
-            permissions.putExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
-            permissions.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(permissions);
+            DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
+            saveAccelerometerDevice(mLinearAccelerator);
+            Aware.setSetting(this, Aware_Preferences.STATUS_LINEAR_ACCELEROMETER, true);
+
+            if (Aware.getSetting(this, Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER).length() == 0) {
+                Aware.setSetting(this, Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER, 200000);
+            }
+
+            if (Aware.getSetting(this, Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER).length() == 0) {
+                Aware.setSetting(this, Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER, 0.0);
+            }
+
+            if (FREQUENCY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER))
+                    || THRESHOLD != Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER))) {
+
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mLinearAccelerator);
+
+                FREQUENCY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER));
+                THRESHOLD = Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_LINEAR_ACCELEROMETER));
+            }
+
+            mSensorManager.registerListener(this, mLinearAccelerator, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LINEAR_ACCELEROMETER)), sensorHandler);
+
+            if (Aware.DEBUG) Log.d(TAG, "Linear-accelerometer service active: " + FREQUENCY + "ms");
         }
 
         return super.onStartCommand(intent, flags, startId);

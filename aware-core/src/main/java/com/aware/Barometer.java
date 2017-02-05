@@ -50,10 +50,10 @@ public class Barometer extends Aware_Sensor implements SensorEventListener {
     private static Sensor mPressure;
     private static HandlerThread sensorThread = null;
     private static Handler sensorHandler = null;
-    private static PowerManager powerManager = null;
+
     private static PowerManager.WakeLock wakeLock = null;
-//    private static int FIFO_SIZE = 0;
-    private static float LAST_VALUE_0 = 0;
+
+    private static Float LAST_VALUE = null;
 
     private static int FREQUENCY = -1;
     private static double THRESHOLD = 0;
@@ -95,12 +95,12 @@ public class Barometer extends Aware_Sensor implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        // Apply threshold.  If change of values is not enough, do nothing.
-        if (Math.abs(event.values[0] - LAST_VALUE_0 ) < THRESHOLD) {
+        if (LAST_VALUE != null && THRESHOLD > 0 && Math.abs(event.values[0] - LAST_VALUE) < THRESHOLD) {
             return;
         }
-        // Update last values with new values for the next round.
-        LAST_VALUE_0 = event.values[0];
+
+        LAST_VALUE = event.values[0];
+
         // Proceed with saving as usual.
         ContentValues rowData = new ContentValues();
         rowData.put(Barometer_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
@@ -195,13 +195,13 @@ public class Barometer extends Aware_Sensor implements SensorEventListener {
         super.onCreate();
 
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+
         mPressure = mSensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
-//        FIFO_SIZE = mPressure.getFifoReservedEventCount();
 
         sensorThread = new HandlerThread(TAG);
         sensorThread.start();
 
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
         wakeLock.acquire();
 
@@ -235,53 +235,38 @@ public class Barometer extends Aware_Sensor implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
-        boolean permissions_ok = true;
-        for (String p : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                permissions_ok = false;
-                break;
-            }
-        }
-
-        if (permissions_ok) {
-            if (mPressure == null) {
-                if (Aware.DEBUG) Log.w(TAG, "This device does not have a barometer sensor!");
-                Aware.setSetting(this, Aware_Preferences.STATUS_BAROMETER, false);
-                stopSelf();
-            } else {
-
-                DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
-
-                Aware.setSetting(getApplicationContext(), Aware_Preferences.STATUS_BAROMETER, true);
-                saveSensorDevice(mPressure);
-
-                if (Aware.getSetting(this, Aware_Preferences.FREQUENCY_BAROMETER).length() == 0) {
-                    Aware.setSetting(this, Aware_Preferences.FREQUENCY_BAROMETER, 200000);
-                }
-
-                if (Aware.getSetting(this, Aware_Preferences.THRESHOLD_BAROMETER).length() == 0) {
-                    Aware.setSetting(this, Aware_Preferences.THRESHOLD_BAROMETER, 0.0);
-                }
-
-                if (FREQUENCY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER))
-                        || THRESHOLD != Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_BAROMETER))) {
-                    sensorHandler.removeCallbacksAndMessages(null);
-                    mSensorManager.unregisterListener(this, mPressure);
-                    //mSensorManager.registerListener(this, mPressure, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER)), FIFO_SIZE, sensorHandler);
-                    mSensorManager.registerListener(this, mPressure, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER)), sensorHandler);
-
-                    FREQUENCY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER));
-                    THRESHOLD = Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_BAROMETER));
-                }
-
-                if (Aware.DEBUG) Log.d(TAG, "Barometer service active: " + FREQUENCY + "ms");
-            }
+        if (mPressure == null) {
+            if (Aware.DEBUG) Log.w(TAG, "This device does not have a barometer sensor!");
+            Aware.setSetting(this, Aware_Preferences.STATUS_BAROMETER, false);
+            stopSelf();
         } else {
-            Intent permissions = new Intent(this, PermissionsHandler.class);
-            permissions.putExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
-            permissions.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(permissions);
+
+            DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
+
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.STATUS_BAROMETER, true);
+            saveSensorDevice(mPressure);
+
+            if (Aware.getSetting(this, Aware_Preferences.FREQUENCY_BAROMETER).length() == 0) {
+                Aware.setSetting(this, Aware_Preferences.FREQUENCY_BAROMETER, 200000);
+            }
+
+            if (Aware.getSetting(this, Aware_Preferences.THRESHOLD_BAROMETER).length() == 0) {
+                Aware.setSetting(this, Aware_Preferences.THRESHOLD_BAROMETER, 0.0);
+            }
+
+            if (FREQUENCY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER))
+                    || THRESHOLD != Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_BAROMETER))) {
+
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mPressure);
+
+                FREQUENCY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER));
+                THRESHOLD = Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_BAROMETER));
+            }
+
+            mSensorManager.registerListener(this, mPressure, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BAROMETER)), sensorHandler);
+
+            if (Aware.DEBUG) Log.d(TAG, "Barometer service active: " + FREQUENCY + "ms");
         }
 
         return super.onStartCommand(intent, flags, startId);

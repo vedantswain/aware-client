@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -89,6 +90,11 @@ public class Aware_QRCode extends Aware_Activity implements ZBarScannerView.Resu
     private ZBarScannerView mScannerView;
 
     @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
@@ -132,19 +138,20 @@ public class Aware_QRCode extends Aware_Activity implements ZBarScannerView.Resu
 
             ListView list = new ListView(this);
             list.setId(android.R.id.list);
+            list.setVisibility(View.GONE);
 
-            Toolbar toolbar = new Toolbar(this);
-            toolbar.setId(R.id.aware_toolbar);
-            toolbar.setNavigationOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    finish();
-                }
-            });
-            toolbar.setBackgroundColor(Color.parseColor("#33B5E5"));
-            toolbar.setTitleTextColor(Color.parseColor("#FFFFFF"));
+//            Toolbar toolbar = new Toolbar(this);
+//            toolbar.setId(R.id.aware_toolbar);
+//            toolbar.setNavigationOnClickListener(new View.OnClickListener() {
+//                @Override
+//                public void onClick(View view) {
+//                    finish();
+//                }
+//            });
+//            toolbar.setBackgroundColor(Color.parseColor("#33B5E5"));
+//            toolbar.setTitleTextColor(Color.parseColor("#FFFFFF"));
 
-            main.addView(toolbar);
+//            main.addView(toolbar);
             main.addView(mScannerView);
             main.addView(list);
             setContentView(main);

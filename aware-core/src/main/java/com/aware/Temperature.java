@@ -52,12 +52,13 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
 
     private static SensorManager mSensorManager;
     private static Sensor mTemperature;
+
     private static HandlerThread sensorThread = null;
     private static Handler sensorHandler = null;
-    private static PowerManager powerManager = null;
     private static PowerManager.WakeLock wakeLock = null;
-//    private static int FIFO_SIZE = 0;
-    private static float LAST_VALUE_0 = 0;
+
+    private static Float LAST_VALUE = null;
+
     private static int FREQUENCY = -1;
     private static double THRESHOLD = 0;
 
@@ -98,13 +99,12 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        // Apply threshold.  If change of values is not enough, do nothing.
-        if (Math.abs(event.values[0] - LAST_VALUE_0 ) < THRESHOLD) {
+        if (LAST_VALUE != null && THRESHOLD > 0 && Math.abs(event.values[0] - LAST_VALUE) < THRESHOLD) {
             return;
         }
-        // Update last values with new values for the next round.
-        LAST_VALUE_0 = event.values[0];
-        // Proceed with saving as usual.
+
+        LAST_VALUE = event.values[0];
+
         ContentValues rowData = new ContentValues();
         rowData.put(Temperature_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
         rowData.put(Temperature_Data.TIMESTAMP, System.currentTimeMillis());
@@ -197,11 +197,11 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
         super.onCreate();
 
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        powerManager = (PowerManager) getSystemService(POWER_SERVICE);
 
         sensorThread = new HandlerThread(TAG);
         sensorThread.start();
 
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
         wakeLock.acquire();
 
@@ -241,52 +241,37 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        boolean permissions_ok = true;
-        for (String p : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                permissions_ok = false;
-                break;
-            }
-        }
-
-        if (permissions_ok) {
-            if (mTemperature == null) {
-                if (DEBUG) Log.d(TAG, "This device does not have a temperature sensor.");
-                Aware.setSetting(this, Aware_Preferences.STATUS_TEMPERATURE, false);
-                stopSelf();
-            } else {
-                DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
-                Aware.setSetting(this, Aware_Preferences.STATUS_TEMPERATURE, true);
-
-//                FIFO_SIZE = mTemperature.getFifoReservedEventCount();
-                saveSensorDevice(mTemperature);
-
-                if (Aware.getSetting(this, Aware_Preferences.FREQUENCY_TEMPERATURE).length() == 0) {
-                    Aware.setSetting(this, Aware_Preferences.FREQUENCY_TEMPERATURE, 200000);
-                }
-
-                if (Aware.getSetting(this, Aware_Preferences.THRESHOLD_TEMPERATURE).length() == 0) {
-                    Aware.setSetting(this, Aware_Preferences.THRESHOLD_TEMPERATURE, 0.0);
-                }
-
-                if (FREQUENCY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE))
-                        || THRESHOLD != Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_TEMPERATURE))) {
-                    sensorHandler.removeCallbacksAndMessages(null);
-                    mSensorManager.unregisterListener(this, mTemperature);
-//                    mSensorManager.registerListener(this, mTemperature, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE)), FIFO_SIZE, sensorHandler);
-                    mSensorManager.registerListener(this, mTemperature, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE)), sensorHandler);
-
-                    FREQUENCY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE));
-                    THRESHOLD = Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_TEMPERATURE));
-                }
-
-                if (Aware.DEBUG) Log.d(TAG, "Temperature service active...");
-            }
+        if (mTemperature == null) {
+            if (DEBUG) Log.d(TAG, "This device does not have a temperature sensor.");
+            Aware.setSetting(this, Aware_Preferences.STATUS_TEMPERATURE, false);
+            stopSelf();
         } else {
-            Intent permissions = new Intent(this, PermissionsHandler.class);
-            permissions.putExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
-            permissions.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(permissions);
+            DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
+            Aware.setSetting(this, Aware_Preferences.STATUS_TEMPERATURE, true);
+
+            saveSensorDevice(mTemperature);
+
+            if (Aware.getSetting(this, Aware_Preferences.FREQUENCY_TEMPERATURE).length() == 0) {
+                Aware.setSetting(this, Aware_Preferences.FREQUENCY_TEMPERATURE, 200000);
+            }
+
+            if (Aware.getSetting(this, Aware_Preferences.THRESHOLD_TEMPERATURE).length() == 0) {
+                Aware.setSetting(this, Aware_Preferences.THRESHOLD_TEMPERATURE, 0.0);
+            }
+
+            if (FREQUENCY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE))
+                    || THRESHOLD != Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_TEMPERATURE))) {
+
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mTemperature);
+
+                FREQUENCY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE));
+                THRESHOLD = Double.parseDouble(Aware.getSetting(getApplicationContext(), Aware_Preferences.THRESHOLD_TEMPERATURE));
+            }
+
+            mSensorManager.registerListener(this, mTemperature, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE)), sensorHandler);
+
+            if (Aware.DEBUG) Log.d(TAG, "Temperature service active...");
         }
 
         return super.onStartCommand(intent, flags, startId);
