@@ -91,12 +91,12 @@ public class StudyUtils extends IntentService {
 //            }
 
             try {
-                request = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), full_url)).dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
+                request = new Https(SSLManager.getHTTPS(getApplicationContext(), full_url)).dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
             } catch (FileNotFoundException e) {
                 request = null;
             }
         } else {
-            request = new Http(getApplicationContext()).dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
+            request = new Http().dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
         }
 
         if (request != null) {
@@ -126,12 +126,12 @@ public class StudyUtils extends IntentService {
                     SSLManager.handleUrl(getApplicationContext(), full_url, true);
 
                     try {
-                        answer = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), full_url)).dataPOST(full_url, data, true);
+                        answer = new Https(SSLManager.getHTTPS(getApplicationContext(), full_url)).dataPOST(full_url, data, true);
                     } catch (FileNotFoundException e) {
                         answer = null;
                     }
                 } else {
-                    answer = new Http(getApplicationContext()).dataPOST(full_url, data, true);
+                    answer = new Http().dataPOST(full_url, data, true);
                 }
 
                 if (answer == null) {
@@ -186,8 +186,6 @@ public class StudyUtils extends IntentService {
 
                     getContentResolver().insert(Aware_Provider.Aware_Studies.CONTENT_URI, complianceEntry);
 
-                    dbStudy.close();
-
                     //Update the information to the latest
                     ContentValues studyData = new ContentValues();
                     studyData.put(Aware_Provider.Aware_Studies.STUDY_DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
@@ -207,6 +205,8 @@ public class StudyUtils extends IntentService {
                         Log.d(Aware.TAG, "Rejoined study data: " + studyData.toString());
                     }
                 }
+
+                if (dbStudy != null && !dbStudy.isClosed()) dbStudy.close();
 
                 applySettings(getApplicationContext(), study_config);
 
@@ -288,12 +288,12 @@ public class StudyUtils extends IntentService {
         if (schedulers.length() > 0)
             Scheduler.setSchedules(context, schedulers);
 
-        for(String package_name : active_plugins) {
+        for (String package_name : active_plugins) {
             PackageInfo installed = PluginsManager.isInstalled(context, package_name);
             if (installed != null) {
                 Aware.startPlugin(context, package_name);
             } else {
-                Aware.downloadPlugin(context, package_name, false);
+                Aware.downloadPlugin(context, package_name, null, false);
             }
         }
 

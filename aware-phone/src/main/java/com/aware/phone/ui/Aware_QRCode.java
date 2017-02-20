@@ -357,12 +357,12 @@ public class Aware_QRCode extends Aware_Activity implements ZBarScannerView.Resu
 //                }
 
                 try {
-                    request = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), study_url)).dataGET(study_url.substring(0, study_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
+                    request = new Https(SSLManager.getHTTPS(getApplicationContext(), study_url)).dataGET(study_url.substring(0, study_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
                 } catch (FileNotFoundException e) {
                     request = null;
                 }
             } else {
-                request = new Http(getApplicationContext()).dataGET(study_url.substring(0, study_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
+                request = new Http().dataGET(study_url.substring(0, study_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
             }
 
             if (request != null) {
@@ -389,12 +389,12 @@ public class Aware_QRCode extends Aware_Activity implements ZBarScannerView.Resu
                     String answer;
                     if (protocol.equals("https")) {
                         try {
-                            answer = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), study_url)).dataPOST(study_url, data, true);
+                            answer = new Https(SSLManager.getHTTPS(getApplicationContext(), study_url)).dataPOST(study_url, data, true);
                         } catch (FileNotFoundException e) {
                             answer = null;
                         }
                     } else {
-                        answer = new Http(getApplicationContext()).dataPOST(study_url, data, true);
+                        answer = new Http().dataPOST(study_url, data, true);
                     }
 
                     if (answer != null) {
@@ -481,8 +481,6 @@ public class Aware_QRCode extends Aware_Activity implements ZBarScannerView.Resu
 
                         getContentResolver().insert(Aware_Provider.Aware_Studies.CONTENT_URI, complianceEntry);
 
-                        dbStudy.close();
-
                         //Update the information to the latest
                         ContentValues studyData = new ContentValues();
                         studyData.put(Aware_Provider.Aware_Studies.STUDY_DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
@@ -502,6 +500,8 @@ public class Aware_QRCode extends Aware_Activity implements ZBarScannerView.Resu
                             Log.d(Aware.TAG, "Rejoined study data: " + studyData.toString());
                         }
                     }
+
+                    if (dbStudy != null && !dbStudy.isClosed()) dbStudy.close();
 
                     Intent study_scan = new Intent();
                     study_scan.putExtra(Aware_Join_Study.EXTRA_STUDY_URL, study_url);

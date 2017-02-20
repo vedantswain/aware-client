@@ -4,9 +4,11 @@ package com.aware.utils;
 import android.Manifest;
 import android.app.Service;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.IBinder;
@@ -73,14 +75,12 @@ public class Aware_Plugin extends Service {
      */
     public static final int STATUS_PLUGIN_ON = 1;
 
-    private Intent aware;
+    Aware framework;
+    boolean mBound = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
-
-        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length() > 0 ? Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG) : TAG;
-        DEBUG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_FLAG).equals("true");
 
         //Register Context Broadcaster
         IntentFilter filter = new IntentFilter();
@@ -88,28 +88,30 @@ public class Aware_Plugin extends Service {
         filter.addAction(Aware.ACTION_AWARE_SYNC_DATA);
         filter.addAction(Aware.ACTION_AWARE_CLEAR_DATA);
         filter.addAction(Aware.ACTION_AWARE_STOP_PLUGINS);
-        filter.addAction(Aware.ACTION_AWARE_SPACE_MAINTENANCE);
         registerReceiver(contextBroadcaster, filter);
 
         REQUIRED_PERMISSIONS.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
 
         if (!getResources().getBoolean(R.bool.standalone)) {
-            aware = new Intent(getApplicationContext(), Aware.class);
-            startService(aware);
+            Intent aware = new Intent(getApplicationContext(), Aware.class);
+            bindService(aware, mConnection, Context.BIND_AUTO_CREATE);
         }
 
-        if (Aware.getSetting(this, Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
-            Intent study_SSL = new Intent(this, SSLManager.class);
-            study_SSL.putExtra(SSLManager.EXTRA_SERVER, Aware.getSetting(this, Aware_Preferences.WEBSERVICE_SERVER));
-            startService(study_SSL);
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            if (Aware.getSetting(this, Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
+                Intent study_SSL = new Intent(this, SSLManager.class);
+                study_SSL.putExtra(SSLManager.EXTRA_SERVER, Aware.getSetting(this, Aware_Preferences.WEBSERVICE_SERVER));
+                startService(study_SSL);
+            }
+            Aware.debug(this, "created: " + getClass().getName() + " package: " + getPackageName());
         }
-
-        Aware.debug(this, "created: " + getClass().getName() + " package: " + getPackageName());
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Aware.debug(this, "active: " + getClass().getName() + " package: " + getPackageName());
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            Aware.debug(this, "active: " + getClass().getName() + " package: " + getPackageName());
+        }
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -117,18 +119,35 @@ public class Aware_Plugin extends Service {
     public void onDestroy() {
         super.onDestroy();
 
-        Aware.debug(this, "destroyed: " + getClass().getName() + " package: " + getPackageName());
+        if (mBound) {
+            unbindService(mConnection);
+            mBound = false;
+        }
 
-        //Unregister Context Broadcaster
         if (contextBroadcaster != null) {
             unregisterReceiver(contextBroadcaster);
         }
-        if (aware != null) stopService(aware);
+
+        Aware.debug(this, "destroyed: " + getClass().getName() + " package: " + getPackageName());
     }
+
+    private ServiceConnection mConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            Aware.ServiceBinder binder = (Aware.ServiceBinder) service;
+            framework = binder.getService();
+            mBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            mBound = false;
+        }
+    };
 
     /**
      * Interface to share context with other applications/plugins<br/>
-     * You MUST broadcast your contexts here!
+     * You are encouraged to broadcast your contexts here for reusability in other plugins and apps!
      *
      * @author denzil
      */
@@ -186,56 +205,6 @@ public class Aware_Plugin extends Service {
             if (intent.getAction().equals(Aware.ACTION_AWARE_STOP_PLUGINS)) {
                 if (Aware.DEBUG) Log.d(TAG, TAG + " stopped");
                 stopSelf();
-            }
-
-            if (intent.getAction().equals(Aware.ACTION_AWARE_SPACE_MAINTENANCE) && Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA).length() > 0) {
-                Calendar cal = Calendar.getInstance();
-                cal.setTimeInMillis(System.currentTimeMillis());
-
-                switch (Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA))) {
-                    case 1: //weekly
-                        if (DATABASE_TABLES != null && CONTEXT_URIS != null) {
-                            cal.add(Calendar.DAY_OF_YEAR, -7);
-                            if (Aware.DEBUG)
-                                Log.d(TAG, TAG + " cleaning locally any data older than last week (yyyy/mm/dd): " + cal.get(Calendar.YEAR) + '/' + (cal.get(Calendar.MONTH) + 1) + '/' + cal.get(Calendar.DAY_OF_MONTH));
-                            for (int i = 0; i < DATABASE_TABLES.length; i++) {
-                                //Clear locally
-                                String where = "timestamp < " + cal.getTimeInMillis();
-                                int rowsDeleted = context.getContentResolver().delete(CONTEXT_URIS[i], where, null);
-                                if (Aware.DEBUG)
-                                    Log.d(TAG, "Cleaned " + rowsDeleted + " from " + CONTEXT_URIS[i].toString());
-                            }
-                        }
-                        break;
-                    case 2: //monthly
-                        if (DATABASE_TABLES != null && CONTEXT_URIS != null) {
-                            cal.add(Calendar.MONTH, -1);
-                            if (Aware.DEBUG)
-                                Log.d(TAG, TAG + " cleaning locally any data older than last month (yyyy/mm/dd): " + cal.get(Calendar.YEAR) + '/' + (cal.get(Calendar.MONTH) + 1) + '/' + cal.get(Calendar.DAY_OF_MONTH));
-                            for (int i = 0; i < DATABASE_TABLES.length; i++) {
-                                //Clear locally
-                                String where = "timestamp < " + cal.getTimeInMillis();
-                                int rowsDeleted = context.getContentResolver().delete(CONTEXT_URIS[i], where, null);
-                                if (Aware.DEBUG)
-                                    Log.d(TAG, "Cleaned " + rowsDeleted + " from " + CONTEXT_URIS[i].toString());
-                            }
-                        }
-                        break;
-                    case 3: //daily
-                        if (DATABASE_TABLES != null && CONTEXT_URIS != null) {
-                            cal.add(Calendar.DAY_OF_YEAR, -1);
-                            if (Aware.DEBUG)
-                                Log.d(TAG, TAG + " cleaning locally any data older than today (yyyy/mm/dd): " + cal.get(Calendar.YEAR) + '/' + (cal.get(Calendar.MONTH) + 1) + '/' + cal.get(Calendar.DAY_OF_MONTH));
-                            for (int i = 0; i < DATABASE_TABLES.length; i++) {
-                                //Clear locally
-                                String where = "timestamp < " + cal.getTimeInMillis();
-                                int rowsDeleted = context.getContentResolver().delete(CONTEXT_URIS[i], where, null);
-                                if (Aware.DEBUG)
-                                    Log.d(TAG, "Cleaned " + rowsDeleted + " from " + CONTEXT_URIS[i].toString());
-                            }
-                        }
-                        break;
-                }
             }
         }
     }

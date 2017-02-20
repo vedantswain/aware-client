@@ -109,7 +109,6 @@ public class Scheduler extends Aware_Sensor {
     public static void saveSchedule(Context context, Schedule schedule) {
         try {
             ArrayList<String> global_settings = new ArrayList<>();
-            global_settings.add(Aware.SCHEDULE_SPACE_MAINTENANCE);
             global_settings.add(Aware.SCHEDULE_SYNC_DATA);
 
             boolean is_global = global_settings.contains(schedule.getScheduleID());
@@ -376,7 +375,6 @@ public class Scheduler extends Aware_Sensor {
     public static void removeSchedule(Context context, String schedule_id) {
 
         ArrayList<String> global_settings = new ArrayList<>();
-        global_settings.add(Aware.SCHEDULE_SPACE_MAINTENANCE);
         global_settings.add(Aware.SCHEDULE_SYNC_DATA);
 
         boolean is_global = global_settings.contains(schedule_id);
@@ -385,7 +383,6 @@ public class Scheduler extends Aware_Sensor {
 
         context.getContentResolver().delete(Scheduler_Provider.Scheduler_Data.CONTENT_URI, Scheduler_Provider.Scheduler_Data.SCHEDULE_ID + " LIKE '" + schedule_id + "' AND " + Scheduler_Provider.Scheduler_Data.PACKAGE_NAME + " LIKE '" + ((is_global) ? "com.aware.phone" : context.getPackageName()) + "'", null);
 
-        //unregister any potential broadcast receivers or contentobservers
         clearReceivers(context, schedule_id);
         clearContentObservers(context, schedule_id);
     }
@@ -399,7 +396,6 @@ public class Scheduler extends Aware_Sensor {
      */
     public static void removeSchedule(Context context, String schedule_id, String package_name) {
         context.getContentResolver().delete(Scheduler_Provider.Scheduler_Data.CONTENT_URI, Scheduler_Provider.Scheduler_Data.SCHEDULE_ID + " LIKE '" + schedule_id + "' AND " + Scheduler_Provider.Scheduler_Data.PACKAGE_NAME + " LIKE '" + package_name + "'", null);
-
         clearReceivers(context, schedule_id);
         clearContentObservers(context, schedule_id);
     }
@@ -414,7 +410,6 @@ public class Scheduler extends Aware_Sensor {
     public static Schedule getSchedule(Context context, String schedule_id) {
 
         ArrayList<String> global_settings = new ArrayList<>();
-        global_settings.add(Aware.SCHEDULE_SPACE_MAINTENANCE);
         global_settings.add(Aware.SCHEDULE_SYNC_DATA);
 
         boolean is_global = global_settings.contains(schedule_id);
@@ -430,8 +425,8 @@ public class Scheduler extends Aware_Sensor {
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-            scheduleData.close();
         }
+        if (scheduleData != null && !scheduleData.isClosed()) scheduleData.close();
         return output;
     }
 
@@ -453,14 +448,15 @@ public class Scheduler extends Aware_Sensor {
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-            scheduleData.close();
         }
+        if (scheduleData != null && !scheduleData.isClosed()) scheduleData.close();
         return output;
     }
 
     /**
      * Allow for setting predetermined schedules from MQTT, study configs or other applications
      * JSONArray contains an object with two variables: schedule and package
+     *
      * @param schedules
      */
     public static void setSchedules(Context c, JSONArray schedules) {
@@ -634,6 +630,10 @@ public class Scheduler extends Aware_Sensor {
 
         public Schedule addHour(int hour) throws JSONException {
             JSONArray hours = getHours();
+            for (int i = 0; i < hours.length(); i++) {
+                int m = hours.getInt(i);
+                if (m == hour) return this;
+            }
             hours.put(hour);
             return this;
         }
@@ -646,6 +646,12 @@ public class Scheduler extends Aware_Sensor {
          */
         public int getDailyLatest() throws JSONException {
             JSONArray hours = getHours();
+
+            //Handle case when random is requested without a time frame
+            if (hours.length() == 0) {
+                return 23;
+            }
+
             int max = 0;
             for (int i = 0; i < hours.length(); i++) {
                 if (hours.getInt(i) >= max) max = hours.getInt(i);
@@ -664,6 +670,12 @@ public class Scheduler extends Aware_Sensor {
          */
         public int getDailyEarliest() throws JSONException {
             JSONArray hours = getHours();
+
+            //Handle case when random is requested without a time frame
+            if (hours.length() == 0) {
+                return 0;
+            }
+
             int min = 23;
             for (int i = 0; i < hours.length(); i++) {
                 if (hours.getInt(i) <= min) min = hours.getInt(i);
@@ -676,6 +688,10 @@ public class Scheduler extends Aware_Sensor {
 
         public Schedule addMinute(int minute) throws JSONException {
             JSONArray minutes = getMinutes();
+            for (int i = 0; i < minutes.length(); i++) {
+                int m = minutes.getInt(i);
+                if (m == minute) return this;
+            }
             minutes.put(minute);
             return this;
         }
@@ -762,6 +778,10 @@ public class Scheduler extends Aware_Sensor {
          */
         public Schedule addWeekday(String week_day) throws JSONException {
             JSONArray weekdays = getWeekdays();
+            for (int i = 0; i < weekdays.length(); i++) {
+                String m = weekdays.getString(i);
+                if (m.equalsIgnoreCase(week_day)) return this;
+            }
             weekdays.put(week_day);
             return this;
         }
@@ -787,6 +807,10 @@ public class Scheduler extends Aware_Sensor {
          */
         public Schedule addMonth(String month) throws JSONException {
             JSONArray months = getMonths();
+            for (int i = 0; i < months.length(); i++) {
+                String m = months.getString(i);
+                if (m.equalsIgnoreCase(month)) return this;
+            }
             months.put(month);
             return this;
         }
@@ -1126,8 +1150,8 @@ public class Scheduler extends Aware_Sensor {
 
             if (last_time_triggered != null && last_time_triggered.moveToFirst()) {
                 last_triggered = last_time_triggered.getLong(last_time_triggered.getColumnIndex(Scheduler_Provider.Scheduler_Data.LAST_TRIGGERED));
-                last_time_triggered.close();
             }
+            if (last_time_triggered != null && !last_time_triggered.isClosed()) last_time_triggered.close();
 
             // This is a scheduled task on a specific timestamp.
             // NOTE: Once triggered, it's deleted from the database automatically.
@@ -1158,7 +1182,6 @@ public class Scheduler extends Aware_Sensor {
             Boolean execute_interval = null;
             if (schedule.getInterval() > 0 && previous == null) {
                 execute_interval = true;
-                if (DEBUG) Log.d(Scheduler.TAG, "Trigger interval: " + execute_interval);
             } else if (previous != null && schedule.getInterval() > 0) {
                 execute_interval = is_interval_elapsed(now, previous, schedule.getInterval());
                 if (DEBUG) Log.d(Scheduler.TAG, "Trigger interval: " + execute_interval);
@@ -1166,41 +1189,25 @@ public class Scheduler extends Aware_Sensor {
 
             Boolean execute_month = null;
             if (schedule.getMonths().length() > 0) {
-                if (previous != null && is_same_month(now, previous)) {
-                    execute_month = false;
-                } else
-                    execute_month = is_trigger_month(schedule);
-
+                execute_month = is_trigger_month(schedule);
                 if (DEBUG) Log.d(Scheduler.TAG, "Trigger month: " + execute_month);
             }
 
             Boolean execute_weekdays = null;
             if (schedule.getWeekdays().length() > 0) {
-                if (previous != null && is_same_weekday(now, previous)) {
-                    execute_weekdays = false;
-                } else
-                    execute_weekdays = is_trigger_weekday(schedule);
-
+                execute_weekdays = is_trigger_weekday(schedule);
                 if (DEBUG) Log.d(Scheduler.TAG, "Trigger weekday: " + execute_weekdays);
             }
 
             Boolean execute_hours = null;
             if (schedule.getHours().length() > 0) {
-                if (previous != null && is_same_hour_day(now, previous)) {
-                    execute_hours = false;
-                } else
-                    execute_hours = is_trigger_hour(schedule);
-
+                execute_hours = is_trigger_hour(schedule);
                 if (DEBUG) Log.d(Scheduler.TAG, "Trigger hour: " + execute_hours);
             }
 
             Boolean execute_minutes = null;
             if (schedule.getMinutes().length() > 0) {
-                if (previous != null && is_same_minute_hour(now, previous)) {
-                    execute_minutes = false;
-                } else
-                    execute_minutes = is_trigger_minute(schedule);
-
+                execute_minutes = is_trigger_minute(schedule);
                 if (DEBUG) Log.d(Scheduler.TAG, "Trigger minute: " + execute_minutes);
             }
 
@@ -1219,34 +1226,34 @@ public class Scheduler extends Aware_Sensor {
         return false;
     }
 
-    private boolean is_interval_elapsed(Calendar date_one, Calendar date_two, long required_minutes) {
-        long elapsed = (date_one.getTimeInMillis() - date_two.getTimeInMillis()) / 1000 / 60;
+    public boolean is_interval_elapsed(Calendar date_one, Calendar date_two, long required_minutes) {
+        long elapsed = Math.round((date_one.getTimeInMillis() - date_two.getTimeInMillis()) / 1000 / 60.0);
         if (DEBUG)
             Log.d(Scheduler.TAG, "Checking interval elapsed: " + elapsed + " vs " + required_minutes + " minutes elapsed");
 
         return (elapsed >= required_minutes);
     }
 
-    private boolean is_same_minute_hour(Calendar date_one, Calendar date_two) {
+    public boolean is_same_minute_hour(Calendar date_one, Calendar date_two) {
         return date_one.get(Calendar.YEAR) == date_two.get(Calendar.YEAR)
                 && date_one.get(Calendar.DAY_OF_YEAR) == date_two.get(Calendar.DAY_OF_YEAR)
                 && date_one.get(Calendar.HOUR_OF_DAY) == date_two.get(Calendar.HOUR_OF_DAY)
                 && date_one.get(Calendar.MINUTE) == date_two.get(Calendar.MINUTE);
     }
 
-    private boolean is_same_hour_day(Calendar date_one, Calendar date_two) {
+    public boolean is_same_hour_day(Calendar date_one, Calendar date_two) {
         return date_one.get(Calendar.YEAR) == date_two.get(Calendar.YEAR)
                 && date_one.get(Calendar.DAY_OF_YEAR) == date_two.get(Calendar.DAY_OF_YEAR)
                 && date_one.get(Calendar.HOUR_OF_DAY) == date_two.get(Calendar.HOUR_OF_DAY);
     }
 
-    private boolean is_same_weekday(Calendar date_one, Calendar date_two) {
+    public boolean is_same_weekday(Calendar date_one, Calendar date_two) {
         return date_one.get(Calendar.YEAR) == date_two.get(Calendar.YEAR)
                 && date_one.get(Calendar.WEEK_OF_YEAR) == date_two.get(Calendar.WEEK_OF_YEAR)
                 && date_one.get(Calendar.DAY_OF_WEEK) == date_two.get(Calendar.DAY_OF_WEEK);
     }
 
-    private boolean is_same_month(Calendar date_one, Calendar date_two) {
+    public boolean is_same_month(Calendar date_one, Calendar date_two) {
         return date_one.get(Calendar.YEAR) == date_two.get(Calendar.YEAR)
                 && date_one.get(Calendar.MONTH) == date_two.get(Calendar.MONTH);
     }

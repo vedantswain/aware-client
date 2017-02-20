@@ -2,7 +2,6 @@
 package com.aware;
 
 import android.app.ActivityManager;
-import android.app.Application;
 import android.app.Service;
 import android.app.UiModeManager;
 import android.content.BroadcastReceiver;
@@ -37,6 +36,7 @@ import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -66,7 +66,6 @@ import org.json.JSONObject;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -74,7 +73,6 @@ import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 
 import dalvik.system.DexFile;
@@ -140,12 +138,6 @@ public class Aware extends Service {
     public static final String EXTRA_PLUGIN = "extra_plugin";
 
     /**
-     * Received broadcast on all modules
-     * - Cleans old data from the content providers
-     */
-    public static final String ACTION_AWARE_SPACE_MAINTENANCE = "ACTION_AWARE_SPACE_MAINTENANCE";
-
-    /**
      * Used by Plugin Manager to refresh UI
      */
     public static final String ACTION_AWARE_UPDATE_PLUGINS_INFO = "ACTION_AWARE_UPDATE_PLUGINS_INFO";
@@ -168,7 +160,6 @@ public class Aware extends Service {
     /**
      * Used on the scheduler class to define global schedules for AWARE, SYNC and SPACE MAINTENANCE actions
      */
-    public static final String SCHEDULE_SPACE_MAINTENANCE = "schedule_aware_space_maintenance";
     public static final String SCHEDULE_SYNC_DATA = "schedule_aware_sync_data";
     public static final String SCHEDULE_STUDY_COMPLIANCE = "schedule_aware_study_compliance";
     public static final String SCHEDULE_KEEP_ALIVE = "schedule_aware_keep_alive";
@@ -231,7 +222,7 @@ public class Aware extends Service {
     private final IBinder serviceBinder = new ServiceBinder();
 
     public class ServiceBinder extends Binder {
-        Aware getService() {
+        public Aware getService() {
             return Aware.getService();
         }
     }
@@ -313,7 +304,7 @@ public class Aware extends Service {
             }
 
             try {
-                new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), "https://api.awareframework.com/index.php")).dataPOST("https://api.awareframework.com/index.php/awaredev/alive", device_ping, true);
+                new Https(SSLManager.getHTTPS(getApplicationContext(), "https://api.awareframework.com/index.php")).dataPOST("https://api.awareframework.com/index.php/awaredev/alive", device_ping, true);
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             }
@@ -331,7 +322,7 @@ public class Aware extends Service {
             studyCheck.put("study_check", "1");
 
             try {
-                String study_status = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER)))
+                String study_status = new Https(SSLManager.getHTTPS(getApplicationContext(), Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER)))
                         .dataPOST(Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER), studyCheck, true);
 
                 if (study_status == null)
@@ -642,59 +633,6 @@ public class Aware extends Service {
                     }
                 }
             }
-
-            if (Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA).length() > 0) {
-                String[] frequency = new String[]{"never", "weekly", "monthly", "daily", "always"};
-                int frequency_space_maintenance = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA));
-
-                if (DEBUG && frequency_space_maintenance != 0)
-                    Log.d(TAG, "Space maintenance is: " + frequency[frequency_space_maintenance]);
-
-                try {
-                    if (frequency_space_maintenance == 0 || frequency_space_maintenance == 4) { //if always, we clear old data as soon as we upload to server
-                        Scheduler.removeSchedule(getApplicationContext(), SCHEDULE_SPACE_MAINTENANCE);
-                    } else {
-                        Scheduler.Schedule cleanup = new Scheduler.Schedule(SCHEDULE_SPACE_MAINTENANCE);
-                        switch (frequency_space_maintenance) {
-                            case 1: //weekly, by default every Sunday
-                                cleanup.addWeekday("Sunday")
-                                        .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
-                                        .setActionIntentAction(Aware.ACTION_AWARE_SPACE_MAINTENANCE);
-                                break;
-                            case 2: //monthly
-                                cleanup.addMonth("January")
-                                        .addMonth("February")
-                                        .addMonth("March")
-                                        .addMonth("April")
-                                        .addMonth("May")
-                                        .addMonth("June")
-                                        .addMonth("July")
-                                        .addMonth("August")
-                                        .addMonth("September")
-                                        .addMonth("October")
-                                        .addMonth("November")
-                                        .addMonth("December")
-                                        .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
-                                        .setActionIntentAction(Aware.ACTION_AWARE_SPACE_MAINTENANCE);
-                                break;
-                            case 3: //daily
-                                cleanup.addWeekday("Monday")
-                                        .addWeekday("Tuesday")
-                                        .addWeekday("Wednesday")
-                                        .addWeekday("Thursday")
-                                        .addWeekday("Friday")
-                                        .addWeekday("Saturday")
-                                        .addWeekday("Sunday")
-                                        .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
-                                        .setActionIntentAction(Aware.ACTION_AWARE_SPACE_MAINTENANCE);
-                                break;
-                        }
-                        Scheduler.saveSchedule(getApplicationContext(), cleanup);
-                    }
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            }
         } else {
             ArrayList<String> active_plugins = new ArrayList<>();
             Cursor enabled_plugins = getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_STATUS + "=" + Aware_Plugin.STATUS_PLUGIN_ON, null, null);
@@ -795,10 +733,12 @@ public class Aware extends Service {
      * @param package_name
      * @param is_update
      */
-    public static void downloadPlugin(Context context, String package_name, boolean is_update) {
+    public static void downloadPlugin(Context context, String package_name, String study_custom_url, boolean is_update) {
         Intent pluginIntent = new Intent(context, DownloadPluginService.class);
         pluginIntent.putExtra("package_name", package_name);
         pluginIntent.putExtra("is_update", is_update);
+        if (study_custom_url != null)
+            pluginIntent.putExtra("study_url", study_custom_url);
         context.startService(pluginIntent);
     }
 
@@ -807,71 +747,57 @@ public class Aware extends Service {
      *
      * @param context:      application context
      * @param package_name: plugin's package name
-     * @return View for reuse (instance of LinearLayout)
+     * @return View for reuse
      */
     public static View getContextCard(final Context context, final String package_name) {
 
-        String bundled_package = "";
+        boolean is_bundled = false;
         PackageInfo pkg = PluginsManager.isInstalled(context, package_name);
         if (pkg != null && pkg.versionName.equals("bundled")) {
-            bundled_package = context.getPackageName();
+            is_bundled = true;
         }
 
-        if (!isClassAvailable(context, package_name, "ContextCard")) {
-            Log.d(Aware.TAG, "No ContextCard: " + package_name);
-            return null;
+        if (is_bundled) {
+            if (!isClassAvailable(context, context.getPackageName(), "ContextCard")) {
+                Log.d(Aware.TAG, "No ContextCard detected for " + context.getPackageName());
+                return new View(context);
+            }
+        } else {
+            if (!isClassAvailable(context, package_name, "ContextCard")) {
+                Log.d(Aware.TAG, "No ContextCard detected for " + package_name);
+                return new View(context);
+            }
         }
 
-        String ui_class = package_name + ".ContextCard";
         try {
-            Context packageContext = context.createPackageContext(((bundled_package.length() > 0) ? bundled_package : package_name), Context.CONTEXT_INCLUDE_CODE + Context.CONTEXT_IGNORE_SECURITY);
-            Class<?> fragment_loader = packageContext.getClassLoader().loadClass(ui_class);
-            Object fragment = fragment_loader.newInstance();
-            Method[] allMethods = fragment_loader.getDeclaredMethods();
-            Method m = null;
-            for (Method mItem : allMethods) {
-                String mName = mItem.getName();
-                if (mName.contains("getContextCard")) {
-                    mItem.setAccessible(true);
-                    m = mItem;
-                    break;
-                }
-            }
+            String contextCardClass = ((is_bundled) ? context.getPackageName() + "/" + package_name : package_name ) + ".ContextCard";
+            Context reflectedContext = context.createPackageContext(((is_bundled) ? context.getPackageName() : package_name), Context.CONTEXT_INCLUDE_CODE + Context.CONTEXT_IGNORE_SECURITY);
+            Class<?> reflectedContextCard = reflectedContext.getClassLoader().loadClass(contextCardClass);
+            Object contextCard = reflectedContextCard.newInstance();
+            Method getContextCard = contextCard.getClass().getDeclaredMethod("getContextCard", Context.class);
+            getContextCard.setAccessible(true);
 
-            View ui = null;
-            try {
-                ui = (View) m.invoke(fragment, packageContext);
-            } catch (InvocationTargetException e) {
-                Log.d(TAG, e.getCause().getMessage());
-                return ui;
-            }
-
+            View ui = (View) getContextCard.invoke(contextCard, reflectedContext);
             if (ui != null) {
-                ui.setId(new Random(System.currentTimeMillis()).nextInt());
                 ui.setBackgroundColor(Color.WHITE);
                 ui.setPadding(0, 0, 0, 10);
 
                 LinearLayout card = new LinearLayout(context);
-                card.setId(new Random(System.currentTimeMillis()).nextInt());
 
                 LinearLayout.LayoutParams card_params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 card.setLayoutParams(card_params);
                 card.setOrientation(LinearLayout.VERTICAL);
 
                 LinearLayout info = new LinearLayout(context);
-                info.setId(new Random(System.currentTimeMillis()).nextInt());
-
                 LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 info.setLayoutParams(params);
                 info.setOrientation(LinearLayout.HORIZONTAL);
                 info.setBackgroundColor(Color.parseColor("#33B5E5"));
 
                 TextView plugin_header = new TextView(context);
-                plugin_header.setId(new Random(System.currentTimeMillis()).nextInt());
-
                 plugin_header.setText(PluginsManager.getPluginName(context, package_name));
                 plugin_header.setTextColor(Color.WHITE);
-                plugin_header.setPadding(10, 0, 0, 0);
+                plugin_header.setPadding(16, 0, 0, 0);
                 params.gravity = android.view.Gravity.CENTER_VERTICAL;
                 plugin_header.setLayoutParams(params);
                 info.addView(plugin_header);
@@ -879,27 +805,27 @@ public class Aware extends Service {
                 //Check if plugin has settings. Add button if it does.
                 if (isClassAvailable(context, package_name, "Settings")) {
                     ImageView infoSettings = new ImageView(context);
-                    infoSettings.setId(new Random(System.currentTimeMillis()).nextInt());
-
                     infoSettings.setBackgroundResource(R.drawable.ic_action_plugin_settings);
-                    infoSettings.setAdjustViewBounds(true);
-                    infoSettings.setMaxWidth(10);
                     infoSettings.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-
-                            String bundled_package = "";
+                            boolean is_bundled = false;
                             PackageInfo pkg = PluginsManager.isInstalled(context, package_name);
                             if (pkg != null && pkg.versionName.equals("bundled")) {
-                                bundled_package = context.getPackageName();
+                                is_bundled = true;
                             }
 
                             Intent open_settings = new Intent();
-                            open_settings.setComponent(new ComponentName(((bundled_package.length() > 0) ? bundled_package : package_name), package_name + ".Settings"));
+                            open_settings.setComponent(new ComponentName(((is_bundled) ? context.getPackageName() : package_name ), package_name + ".Settings"));
                             open_settings.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                             context.startActivity(open_settings);
                         }
                     });
+                    ViewGroup.LayoutParams paramsHeader = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    paramsHeader.height = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 46, context.getResources().getDisplayMetrics());
+                    paramsHeader.width = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 46, context.getResources().getDisplayMetrics());
+                    infoSettings.setLayoutParams(paramsHeader);
+
                     info.addView(infoSettings);
 
                     //Add settings shortcut to card
@@ -911,23 +837,11 @@ public class Aware extends Service {
 
                 return card;
             } else {
-                return null;
+                return new View(context);
             }
-        } catch (NameNotFoundException e) {
-            Log.d(TAG, e.getCause().getMessage());
-        } catch (ClassNotFoundException e) {
-            Log.d(TAG, e.getCause().getMessage());
-        } catch (IllegalAccessException e) {
-            Log.d(TAG, e.getCause().getMessage());
-        } catch (IllegalArgumentException e) {
-            Log.d(TAG, e.getCause().getMessage());
-        } catch (NullPointerException e) {
-            Log.d(TAG, e.getCause().getMessage());
-        } catch (InstantiationException e) {
-            Log.d(TAG, e.getCause().getMessage());
+        } catch (InstantiationException | NoSuchMethodException | NameNotFoundException | IllegalAccessException | ClassNotFoundException | InvocationTargetException e) {
+            return new View(context);
         }
-
-        return null;
     }
 
     /**
@@ -1360,7 +1274,7 @@ public class Aware extends Service {
                             if (PluginsManager.isInstalled(c, enabled.getJSONObject(i).getString("plugin")) != null) {
                                 Aware.startPlugin(c, enabled.getJSONObject(i).getString("plugin"));
                             } else
-                                Aware.downloadPlugin(c, enabled.getJSONObject(i).getString("plugin"), false);
+                                Aware.downloadPlugin(c, enabled.getJSONObject(i).getString("plugin"), null, false);
                         }
 
                         for (int i = 0; i < disabled.length(); i++) {
@@ -1551,12 +1465,12 @@ public class Aware extends Service {
 //                }
 
                 try {
-                    request = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), full_url)).dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
+                    request = new Https(SSLManager.getHTTPS(getApplicationContext(), full_url)).dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
                 } catch (FileNotFoundException e) {
                     request = null;
                 }
             } else {
-                request = new Http(getApplicationContext()).dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
+                request = new Http().dataGET(full_url.substring(0, full_url.indexOf("/index.php")) + "/index.php/webservice/client_get_study_info/" + study_api_key, true);
             }
 
             if (request != null) {
@@ -1589,12 +1503,12 @@ public class Aware extends Service {
                         SSLManager.handleUrl(getApplicationContext(), full_url, true);
 
                         try {
-                            answer = new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), full_url)).dataPOST(full_url, data, true);
+                            answer = new Https(SSLManager.getHTTPS(getApplicationContext(), full_url)).dataPOST(full_url, data, true);
                         } catch (FileNotFoundException e) {
                             answer = null;
                         }
                     } else {
-                        answer = new Http(getApplicationContext()).dataPOST(full_url, data, true);
+                        answer = new Http().dataPOST(full_url, data, true);
                     }
 
                     if (answer == null) {
@@ -1650,8 +1564,6 @@ public class Aware extends Service {
                         complianceEntry.put(Aware_Provider.Aware_Studies.STUDY_DESCRIPTION, dbStudy.getString(dbStudy.getColumnIndex(Aware_Provider.Aware_Studies.STUDY_DESCRIPTION)));
                         complianceEntry.put(Aware_Provider.Aware_Studies.STUDY_COMPLIANCE, "rejoined study. abandoning previous");
 
-                        dbStudy.close();
-
                         //Update the information to the latest
                         ContentValues studyData = new ContentValues();
                         studyData.put(Aware_Provider.Aware_Studies.STUDY_DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
@@ -1671,6 +1583,8 @@ public class Aware extends Service {
                             Log.d(Aware.TAG, "Rejoined study data: " + studyData.toString());
                         }
                     }
+
+                    if (dbStudy != null && !dbStudy.isClosed()) dbStudy.close();
 
                     //Apply study settings
                     JSONArray plugins = new JSONArray();
@@ -1804,6 +1718,7 @@ public class Aware extends Service {
             } while (enabled_plugins.moveToNext());
         }
         if (enabled_plugins != null && !enabled_plugins.isClosed()) enabled_plugins.close();
+
         if (active_plugins.size() > 0) {
             for (String package_name : active_plugins) {
                 stopPlugin(context, package_name);
@@ -1905,8 +1820,8 @@ public class Aware extends Service {
                         if (current_status.getInt(current_status.getColumnIndex(Aware_Plugins.PLUGIN_STATUS)) == PluginsManager.PLUGIN_UPDATED) { //was updated, set to active now
                             rowData.put(Aware_Plugins.PLUGIN_STATUS, Aware_Plugin.STATUS_PLUGIN_ON);
                         }
-                        current_status.close();
                     }
+                    if ( current_status != null && ! current_status.isClosed()) current_status.close();
 
                     context.getContentResolver().update(Aware_Plugins.CONTENT_URI, rowData, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + packageName + "'", null);
 

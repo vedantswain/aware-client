@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
@@ -26,6 +27,7 @@ import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.res.ResourcesCompat;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.ViewGroup;
@@ -42,6 +44,7 @@ import com.aware.utils.Https;
 import com.aware.utils.SSLManager;
 
 import java.io.FileNotFoundException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -54,19 +57,17 @@ import java.util.UUID;
 public class Aware_Client extends Aware_Activity implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     public static ArrayList<String> REQUIRED_PERMISSIONS = new ArrayList<>();
-    private static boolean permissions_ok = true;
+
+    private static boolean permissions_ok;
+
     private static Hashtable<String, Boolean> listSensorType;
-    private List<String[]> optionalSensors;
+    private List<String[]> optionalSensors = new ArrayList<>();
 
     private static SharedPreferences prefs;
-
-    private SettingsSync settingsSync = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        optionalSensors = new ArrayList<String[]>();
 
         optionalSensors.add(new String[]{Aware_Preferences.STATUS_ACCELEROMETER, Sensor.STRING_TYPE_ACCELEROMETER});
         optionalSensors.add(new String[]{Aware_Preferences.STATUS_SIGNIFICANT_MOTION, Sensor.STRING_TYPE_ACCELEROMETER});
@@ -83,10 +84,10 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         SensorManager manager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         List<Sensor> sensors = manager.getSensorList(Sensor.TYPE_ALL);
         listSensorType = new Hashtable<>();
-        for(int i=0; i<sensors.size(); i++){
+        for (int i = 0; i < sensors.size(); i++) {
             listSensorType.put(sensors.get(i).getStringType(), true);
             if (Aware.DEBUG)
-                Log.d(Aware.TAG, "Sensor: " + sensors.get(i).getStringType() + " " + sensors.get(i).getType() + " " + Sensor.TYPE_GYROSCOPE);
+                Log.d(Aware.TAG, "Sensor: " + sensors.get(i).getStringType() + " " + sensors.get(i).getType());
         }
 
         addPreferencesFromResource(R.xml.aware_preferences);
@@ -108,8 +109,173 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                 break;
             }
         }
+    }
 
-        if (permissions_ok) {
+    @Override
+    public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, final Preference preference) {
+        if (preference instanceof PreferenceScreen) {
+            Dialog subpref = ((PreferenceScreen) preference).getDialog();
+            ViewGroup root = (ViewGroup) subpref.findViewById(android.R.id.content).getParent();
+            Toolbar toolbar = new Toolbar(this);
+            toolbar.setBackgroundColor(ContextCompat.getColor(preferenceScreen.getContext(), R.color.primary));
+            toolbar.setTitleTextColor(ContextCompat.getColor(preferenceScreen.getContext(), android.R.color.white));
+            toolbar.setTitle(preference.getTitle());
+            root.addView(toolbar, 0); //add to the top
+
+            subpref.setOnDismissListener(new DialogInterface.OnDismissListener() {
+                @Override
+                public void onDismiss(DialogInterface dialog) {
+                    new SettingsSync().execute(preference);
+                }
+            });
+        }
+        return super.onPreferenceTreeClick(preferenceScreen, preference);
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        String value = "";
+        Map<String, ?> keys = sharedPreferences.getAll();
+        if (keys.containsKey(key)) {
+            Object entry = keys.get(key);
+            if (entry instanceof Boolean)
+                value = String.valueOf(sharedPreferences.getBoolean(key, false));
+            else if (entry instanceof String)
+                value = String.valueOf(sharedPreferences.getString(key, "error"));
+            else if (entry instanceof Integer)
+                value = String.valueOf(sharedPreferences.getInt(key, 0));
+        }
+
+        Aware.setSetting(getApplicationContext(), key, value);
+        Preference pref = findPreference(key);
+        if (CheckBoxPreference.class.isInstance(pref)) {
+            CheckBoxPreference check = (CheckBoxPreference) findPreference(key);
+            check.setChecked(Aware.getSetting(getApplicationContext(), key).equals("true"));
+
+            //update the parent to show active/inactive
+            new SettingsSync().execute(pref);
+        }
+        if (EditTextPreference.class.isInstance(pref)) {
+            EditTextPreference text = (EditTextPreference) findPreference(key);
+            text.setSummary(Aware.getSetting(getApplicationContext(), key));
+            text.setText(Aware.getSetting(getApplicationContext(), key));
+        }
+        if (ListPreference.class.isInstance(pref)) {
+            ListPreference list = (ListPreference) findPreference(key);
+            list.setSummary(list.getEntry());
+        }
+
+        Aware.toggleSensors(getApplicationContext());
+    }
+
+    private class SettingsSync extends AsyncTask<Preference, Preference, Void> {
+        @Override
+        protected Void doInBackground(Preference... params) {
+            for (Preference pref : params) {
+                publishProgress(pref);
+            }
+            return null;
+        }
+
+        @Override
+        protected void onProgressUpdate(Preference... values) {
+            super.onProgressUpdate(values);
+
+            Preference pref = values[0];
+
+            if (CheckBoxPreference.class.isInstance(pref)) {
+                CheckBoxPreference check = (CheckBoxPreference) findPreference(pref.getKey());
+                check.setChecked(Aware.getSetting(getApplicationContext(), pref.getKey()).equals("true"));
+                if (check.isChecked()) {
+                    if (pref.getKey().equalsIgnoreCase(Aware_Preferences.AWARE_DONATE_USAGE)) {
+                        Toast.makeText(getApplicationContext(), "Thanks!", Toast.LENGTH_SHORT).show();
+                        new AsyncPing().execute();
+                    }
+                    if (pref.getKey().equalsIgnoreCase(Aware_Preferences.STATUS_WEBSERVICE)) {
+                        if (Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER).length() == 0) {
+                            Toast.makeText(getApplicationContext(), "Study URL missing...", Toast.LENGTH_SHORT).show();
+                        } else if (!Aware.isStudy(getApplicationContext())) {
+                            Aware.joinStudy(getApplicationContext(), Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
+                            Intent study_scan = new Intent();
+                            study_scan.putExtra(Aware_Join_Study.EXTRA_STUDY_URL, Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
+                            setResult(Activity.RESULT_OK, study_scan);
+                            finish();
+                        }
+                    }
+                }
+            }
+
+            if (EditTextPreference.class.isInstance(pref)) {
+                EditTextPreference text = (EditTextPreference) findPreference(pref.getKey());
+                text.setText(Aware.getSetting(getApplicationContext(), pref.getKey()));
+                text.setSummary(Aware.getSetting(getApplicationContext(), pref.getKey()));
+            }
+
+            if (ListPreference.class.isInstance(pref)) {
+                ListPreference list = (ListPreference) findPreference(pref.getKey());
+                list.setSummary(list.getEntry());
+            }
+
+            if (PreferenceScreen.class.isInstance(getPreferenceParent(pref))) {
+                PreferenceScreen parent = (PreferenceScreen) getPreferenceParent(pref);
+                ListAdapter children = parent.getRootAdapter();
+                boolean is_active = false;
+                for (int i = 0; i < children.getCount(); i++) {
+                    Object obj = children.getItem(i);
+                    if (CheckBoxPreference.class.isInstance(obj)) {
+                        CheckBoxPreference child = (CheckBoxPreference) obj;
+                        if (child.getKey().contains("status_")) {
+                            if (child.isChecked()) {
+                                is_active = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (is_active) {
+                    try {
+                        Class res = R.drawable.class;
+                        Field field = res.getField("ic_action_" + parent.getKey());
+                        int icon_id = field.getInt(null);
+                        Drawable category_icon = ContextCompat.getDrawable(getApplicationContext(), icon_id);
+                        if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
+                            category_icon.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getApplicationContext(), R.color.accent), PorterDuff.Mode.SRC_IN));
+                            onContentChanged();
+                        }
+                        if (category_icon != null) parent.setIcon(category_icon);
+                    } catch (NoSuchFieldException | IllegalAccessException e) {
+                    }
+                } else {
+                    try {
+                        Class res = R.drawable.class;
+                        Field field = res.getField("ic_action_" + parent.getKey());
+                        int icon_id = field.getInt(null);
+                        Drawable category_icon = ContextCompat.getDrawable(getApplicationContext(), icon_id);
+                        if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
+                            category_icon.clearColorFilter();
+                            onContentChanged();
+                        }
+                        if (category_icon != null) parent.setIcon(category_icon);
+                    } catch (NoSuchFieldException | IllegalAccessException e) {
+                    }
+                }
+            }
+        }
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (!permissions_ok) {
+            Intent permissionsHandler = new Intent(this, PermissionsHandler.class);
+            permissionsHandler.putStringArrayListExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
+            permissionsHandler.putExtra(PermissionsHandler.EXTRA_REDIRECT_ACTIVITY, getPackageName() + "/" + getClass().getName());
+            startActivityForResult(permissionsHandler, PermissionsHandler.RC_PERMISSIONS);
+            finish();
+            return;
+        } else {
             Intent startAware = new Intent(this, Aware.class);
             startService(startAware);
 
@@ -137,7 +303,7 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                 Aware.setSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER, "https://api.awareframework.com/index.php");
             }
 
-            for (String [] optionalSensor: optionalSensors) {
+            for (String[] optionalSensor : optionalSensors) {
                 Preference pref = findPreference(optionalSensor[0]);
                 PreferenceGroup parent = getPreferenceParent(pref);
                 if (pref.getKey().equalsIgnoreCase(optionalSensor[0]) && !listSensorType.containsKey(optionalSensor[1]))
@@ -155,194 +321,10 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
             if (!Aware.is_watch(this)) {
                 Applications.isAccessibilityServiceActive(this);
             }
-        }
-    }
 
-    @Override
-    public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, final Preference preference) {
-        if (preference instanceof PreferenceScreen) {
-            Dialog subpref = ((PreferenceScreen) preference).getDialog();
-            ViewGroup root = (ViewGroup) subpref.findViewById(android.R.id.content).getParent();
-            Toolbar toolbar = new Toolbar(this);
-            toolbar.setBackgroundColor(ContextCompat.getColor(preferenceScreen.getContext(), R.color.primary));
-            toolbar.setTitleTextColor(ContextCompat.getColor(preferenceScreen.getContext(), android.R.color.white));
-            toolbar.setTitle(preference.getTitle());
-            root.addView(toolbar, 0); //add to the top
+            prefs.registerOnSharedPreferenceChangeListener(this);
 
-            subpref.setOnDismissListener(new DialogInterface.OnDismissListener() {
-                @Override
-                public void onDismiss(DialogInterface dialog) {
-                    if (settingsSync == null) {
-                        settingsSync = new SettingsSync();
-                        settingsSync.execute(preference);
-                    }
-                }
-            });
-        }
-        return super.onPreferenceTreeClick(preferenceScreen, preference);
-    }
-
-    @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        String value = "";
-        Map<String, ?> keys = sharedPreferences.getAll();
-        if(keys.containsKey(key)) {
-            Object entry = keys.get(key);
-            if (entry instanceof Boolean)
-                value = String.valueOf(sharedPreferences.getBoolean(key, false));
-            else if (entry instanceof String)
-                value = String.valueOf(sharedPreferences.getString(key, "error"));
-            else if (entry instanceof Integer)
-                value = String.valueOf(sharedPreferences.getInt(key, 0));
-        }
-
-        Aware.setSetting(getApplicationContext(), key, value);
-        Preference pref = findPreference(key);
-        if (CheckBoxPreference.class.isInstance(pref)) {
-            CheckBoxPreference check = (CheckBoxPreference) findPreference(key);
-            check.setChecked(Aware.getSetting(getApplicationContext(), key).equals("true"));
-
-            //update the parent to show active/inactive
-            new SettingsSync().execute(pref);
-        }
-        if (EditTextPreference.class.isInstance(pref)) {
-            EditTextPreference text = (EditTextPreference) findPreference(key);
-            text.setSummary(Aware.getSetting(getApplicationContext(), key));
-        }
-        if (ListPreference.class.isInstance(pref)) {
-            ListPreference list = (ListPreference) findPreference(key);
-            list.setSummary(list.getEntry());
-        }
-
-        Aware.toggleSensors(getApplicationContext());
-    }
-
-    private class SettingsSync extends AsyncTask<Preference, Preference, Void> {
-        @Override
-        protected Void doInBackground(Preference... params) {
-            for (Preference pref : params) {
-                publishProgress(pref);
-            }
-            return null;
-        }
-
-        @Override
-        protected void onProgressUpdate(Preference... values) {
-            super.onProgressUpdate(values);
-
-            if (Aware.DEBUG)
-                Log.d(Aware.TAG, "Preference: " + values[0].getKey() + " parent: " + getPreferenceParent(values[0]).getKey());
-
-            Preference pref = values[0];
-
-            if (CheckBoxPreference.class.isInstance(pref)) {
-
-                CheckBoxPreference check = (CheckBoxPreference) findPreference(pref.getKey());
-                check.setChecked(Aware.getSetting(getApplicationContext(), pref.getKey()).equals("true"));
-
-                if (check.isChecked()) {
-                    if (pref.getKey().equalsIgnoreCase(Aware_Preferences.AWARE_DONATE_USAGE)) {
-                        Toast.makeText(getApplicationContext(), "Thanks!", Toast.LENGTH_SHORT).show();
-                        new AsyncPing().execute();
-                    }
-                    if (pref.getKey().equalsIgnoreCase(Aware_Preferences.STATUS_WEBSERVICE)) {
-                        if (Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER).length() == 0) {
-                            Toast.makeText(getApplicationContext(), "Study URL missing...", Toast.LENGTH_SHORT).show();
-                        }else if (!Aware.isStudy(getApplicationContext())) {
-                            Aware.joinStudy(getApplicationContext(), Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
-                            Intent study_scan = new Intent();
-                            study_scan.putExtra(Aware_Join_Study.EXTRA_STUDY_URL, Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
-                            setResult(Activity.RESULT_OK, study_scan);
-                            finish();
-                        }
-                    }
-                }
-                if (check.getKey().contains("status_")) {
-                    Preference parent = getPreferenceParent(check);
-                    if (PreferenceScreen.class.isInstance(parent)) {
-                        PreferenceScreen parent_category = (PreferenceScreen) findPreference(parent.getKey());
-                        if (parent_category != null) {
-                            Drawable category_icon = parent_category.getIcon();
-                            if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
-                                if (check.isChecked()) {
-                                    category_icon.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getApplicationContext(), R.color.accent), PorterDuff.Mode.SRC_IN));
-                                } else {
-                                    category_icon.clearColorFilter();
-                                }
-                                //Fixed: the icons are redrawn
-                                onContentChanged();
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (EditTextPreference.class.isInstance(pref)) {
-                EditTextPreference text = (EditTextPreference) findPreference(pref.getKey());
-                text.setSummary(Aware.getSetting(getApplicationContext(), pref.getKey()));
-            }
-
-            if (ListPreference.class.isInstance(pref)) {
-                ListPreference list = (ListPreference) findPreference(pref.getKey());
-                list.setSummary(list.getEntry());
-            }
-
-            if (PreferenceScreen.class.isInstance(pref)) {
-                PreferenceScreen category = (PreferenceScreen) findPreference(pref.getKey());
-                if (category != null) {
-                    Drawable category_icon = category.getIcon();
-                    if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
-                        ListAdapter children = category.getRootAdapter();
-                        for(int i = 0; i < children.getCount(); i++) {
-                            Object obj = children.getItem(i);
-                            if (CheckBoxPreference.class.isInstance(obj)) {
-                                CheckBoxPreference child = (CheckBoxPreference) obj;
-                                if (child.getKey().contains("status_")) {
-                                    if (child.isChecked()) {
-                                        category_icon.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getApplicationContext(), R.color.accent), PorterDuff.Mode.SRC_IN));
-                                    } else {
-                                        category_icon.clearColorFilter();
-                                    }
-                                }
-                            }
-                        }
-                        //Fixed: the icons are redrawn
-                        onContentChanged();
-                    }
-                }
-            }
-        }
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-            settingsSync = null;
-        }
-
-        @Override
-        protected void onCancelled() {
-            super.onCancelled();
-            settingsSync = null;
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        if (!permissions_ok) {
-            Intent permissionsHandler = new Intent(this, PermissionsHandler.class);
-            permissionsHandler.putStringArrayListExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
-            permissionsHandler.putExtra(PermissionsHandler.EXTRA_REDIRECT_ACTIVITY, getPackageName() + "/" + getClass().getName());
-            startActivityForResult(permissionsHandler, PermissionsHandler.RC_PERMISSIONS);
-            finish();
-        }
-
-        prefs.registerOnSharedPreferenceChangeListener(this);
-
-        if (settingsSync == null) settingsSync = new SettingsSync();
-        if (settingsSync.getStatus() != AsyncTask.Status.RUNNING) {
-            settingsSync.execute(
+            new SettingsSync().execute(
                     findPreference(Aware_Preferences.DEVICE_ID),
                     findPreference(Aware_Preferences.DEVICE_LABEL),
                     findPreference(Aware_Preferences.AWARE_VERSION),
@@ -374,7 +356,17 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                     findPreference(Aware_Preferences.STATUS_TELEPHONY),
                     findPreference(Aware_Preferences.STATUS_WIFI),
                     findPreference(Aware_Preferences.STATUS_MQTT),
-                    findPreference(Aware_Preferences.STATUS_WEBSERVICE)
+                    findPreference(Aware_Preferences.MQTT_SERVER),
+                    findPreference(Aware_Preferences.MQTT_PORT),
+                    findPreference(Aware_Preferences.MQTT_USERNAME),
+                    findPreference(Aware_Preferences.MQTT_PASSWORD),
+                    findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
+                    findPreference(Aware_Preferences.MQTT_QOS),
+                    findPreference(Aware_Preferences.MQTT_PROTOCOL),
+                    findPreference(Aware_Preferences.STATUS_WEBSERVICE),
+                    findPreference(Aware_Preferences.WEBSERVICE_SERVER),
+                    findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
+                    findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA)
             );
         }
     }
@@ -383,7 +375,7 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
     @Override
     protected void onPause() {
         super.onPause();
-        prefs.unregisterOnSharedPreferenceChangeListener(this);
+        if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(this);
     }
 
     private class AsyncPing extends AsyncTask<Void, Void, Boolean> {
@@ -409,7 +401,7 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
             }
 
             try {
-                new Https(getApplicationContext(), SSLManager.getHTTPS(getApplicationContext(), "https://api.awareframework.com/index.php")).dataPOST("https://api.awareframework.com/index.php/awaredev/alive", device_ping, true);
+                new Https(SSLManager.getHTTPS(getApplicationContext(), "https://api.awareframework.com/index.php")).dataPOST("https://api.awareframework.com/index.php/awaredev/alive", device_ping, true);
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             }
