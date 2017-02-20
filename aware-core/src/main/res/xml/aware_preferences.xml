@@ -764,7 +764,7 @@
                 android:title="Study URL" />
 
             <CheckBoxPreference
-                android:defaultValue="false"
+                android:defaultValue="true"
                 android:key="webservice_wifi_only"
                 android:persistent="true"
                 android:summary="Sync only over Wi-Fi"
