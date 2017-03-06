@@ -890,28 +890,11 @@ public class Scheduler extends Aware_Sensor {
         }
     }
 
-    private SchedulerTicker schedulerTicker = new SchedulerTicker();
 
-    public static class SchedulerTicker extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            //Executed every 1-minute. OS will send this tickle automatically
-            if (intent.getAction().equals(Intent.ACTION_TIME_TICK)) {
-                Intent scheduler = new Intent(context, Scheduler.class);
-                scheduler.setAction(Scheduler.ACTION_AWARE_SCHEDULER_CHECK);
-                context.startService(scheduler);
-            }
-        }
-    }
 
     @Override
     public void onCreate() {
         super.onCreate();
-
-        IntentFilter tick = new IntentFilter();
-        tick.addAction(Intent.ACTION_TIME_TICK);
-        registerReceiver(schedulerTicker, tick);
-
         if (DEBUG) Log.d(TAG, "Scheduler is created");
     }
 
@@ -970,6 +953,7 @@ public class Scheduler extends Aware_Sensor {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        super.onStartCommand(intent, flags, startId);
 
         DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
 
@@ -1091,15 +1075,12 @@ public class Scheduler extends Aware_Sensor {
         }
         if (scheduled_tasks != null && !scheduled_tasks.isClosed()) scheduled_tasks.close();
 
-        return super.onStartCommand(intent, flags, startId);
+        return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-
-        //Stop listening to time ticks
-        unregisterReceiver(schedulerTicker);
 
         //Remove broadcast receivers
         for (String schedule_id : schedulerListeners.keySet()) {
