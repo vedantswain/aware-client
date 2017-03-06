@@ -2,8 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.aware">
 
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="com.aware.READ_CONTEXT_DATA" />
     <uses-permission android:name="com.aware.WRITE_CONTEXT_DATA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -32,7 +34,7 @@
             android:name="com.aware.ui.PermissionsHandler"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:launchMode="standard"
             android:theme="@style/Theme.AppCompat.Translucent" />
 
         <!-- Services -->
@@ -47,9 +49,6 @@
             android:exported="true" />
         <service
             android:name="com.aware.Aware$JoinStudy"
-            android:exported="true" />
-        <service
-            android:name="com.aware.utils.SSLManager"
             android:exported="true" />
 
         <service
@@ -104,9 +103,6 @@
             android:exported="true" />
         <service
             android:name="com.aware.Gyroscope"
-            android:exported="true" />
-        <service
-            android:name="com.aware.Bluetooth$BackgroundService"
             android:exported="true" />
         <service
             android:name="com.aware.WiFi"

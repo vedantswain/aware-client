@@ -2,16 +2,20 @@ package com.aware.phone.ui;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.database.sqlite.SQLiteCantOpenDatabaseException;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomNavigationView;
 import android.support.design.widget.CoordinatorLayout;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.PermissionChecker;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.widget.Toolbar;
@@ -81,7 +85,11 @@ public abstract class Aware_Activity extends AppCompatPreferenceActivity {
                         case R.id.aware_plugins: //Plugins
                             Intent playStore = new Intent(Intent.ACTION_VIEW);
                             playStore.setData(Uri.parse("market://search?q=awareframework&c=apps"));
-                            startActivity(playStore);
+                            try {
+                                startActivity(playStore);
+                            } catch (ActivityNotFoundException e) {
+                                Toast.makeText(getApplicationContext(), "Google Play Store installed?", Toast.LENGTH_SHORT).show();
+                            }
                             break;
                         case R.id.aware_stream: //Stream
                             Intent stream_ui = new Intent(getApplicationContext(), Stream_UI.class);
@@ -115,9 +123,10 @@ public abstract class Aware_Activity extends AppCompatPreferenceActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item != null && item.getTitle() != null) {}
+        if (item != null && item.getTitle() != null) {
+        }
         if (item.getTitle().toString().equalsIgnoreCase(getResources().getString(R.string.aware_qrcode))) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && PermissionChecker.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 ArrayList<String> permission = new ArrayList<>();
                 permission.add(Manifest.permission.CAMERA);
 

@@ -4,6 +4,7 @@ package com.aware.phone;
 import android.Manifest;
 import android.app.Activity;
 import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -16,6 +17,7 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,6 +29,7 @@ import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.PermissionChecker;
 import android.support.v4.content.res.ResourcesCompat;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -49,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -56,38 +60,39 @@ import java.util.UUID;
  */
 public class Aware_Client extends Aware_Activity implements SharedPreferences.OnSharedPreferenceChangeListener {
 
-    public static ArrayList<String> REQUIRED_PERMISSIONS = new ArrayList<>();
-
-    private static boolean permissions_ok;
-
-    private static Hashtable<String, Boolean> listSensorType;
-    private List<String[]> optionalSensors = new ArrayList<>();
-
+    public static boolean permissions_ok;
+    private static Hashtable<Integer, Boolean> listSensorType;
     private static SharedPreferences prefs;
+
+    private static final ArrayList<String> REQUIRED_PERMISSIONS = new ArrayList<>();
+    private static final Hashtable<String, Integer> optionalSensors = new Hashtable<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_ACCELEROMETER, Sensor.STRING_TYPE_ACCELEROMETER});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_SIGNIFICANT_MOTION, Sensor.STRING_TYPE_ACCELEROMETER});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_BAROMETER, Sensor.STRING_TYPE_PRESSURE});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_GRAVITY, Sensor.STRING_TYPE_GRAVITY});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_GYROSCOPE, Sensor.STRING_TYPE_GYROSCOPE});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_LIGHT, Sensor.STRING_TYPE_LIGHT});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_LINEAR_ACCELEROMETER, Sensor.STRING_TYPE_LINEAR_ACCELERATION});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_MAGNETOMETER, Sensor.STRING_TYPE_MAGNETIC_FIELD});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_PROXIMITY, Sensor.STRING_TYPE_PROXIMITY});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_ROTATION, Sensor.STRING_TYPE_ROTATION_VECTOR});
-        optionalSensors.add(new String[]{Aware_Preferences.STATUS_TEMPERATURE, Sensor.STRING_TYPE_AMBIENT_TEMPERATURE});
+        prefs = getSharedPreferences("com.aware.phone", Context.MODE_PRIVATE);
+
+        Intent startAware = new Intent(getApplicationContext(), Aware.class);
+        startService(startAware);
+
+        optionalSensors.put(Aware_Preferences.STATUS_ACCELEROMETER, Sensor.TYPE_ACCELEROMETER);
+        optionalSensors.put(Aware_Preferences.STATUS_SIGNIFICANT_MOTION, Sensor.TYPE_ACCELEROMETER);
+        optionalSensors.put(Aware_Preferences.STATUS_BAROMETER, Sensor.TYPE_PRESSURE);
+        optionalSensors.put(Aware_Preferences.STATUS_GRAVITY, Sensor.TYPE_GRAVITY);
+        optionalSensors.put(Aware_Preferences.STATUS_GYROSCOPE, Sensor.TYPE_GYROSCOPE);
+        optionalSensors.put(Aware_Preferences.STATUS_LIGHT, Sensor.TYPE_LIGHT);
+        optionalSensors.put(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER, Sensor.TYPE_LINEAR_ACCELERATION);
+        optionalSensors.put(Aware_Preferences.STATUS_MAGNETOMETER, Sensor.TYPE_MAGNETIC_FIELD);
+        optionalSensors.put(Aware_Preferences.STATUS_PROXIMITY, Sensor.TYPE_PROXIMITY);
+        optionalSensors.put(Aware_Preferences.STATUS_ROTATION, Sensor.TYPE_ROTATION_VECTOR);
+        optionalSensors.put(Aware_Preferences.STATUS_TEMPERATURE, Sensor.TYPE_AMBIENT_TEMPERATURE);
 
         SensorManager manager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         List<Sensor> sensors = manager.getSensorList(Sensor.TYPE_ALL);
         listSensorType = new Hashtable<>();
         for (int i = 0; i < sensors.size(); i++) {
-            listSensorType.put(sensors.get(i).getStringType(), true);
-            if (Aware.DEBUG)
-                Log.d(Aware.TAG, "Sensor: " + sensors.get(i).getStringType() + " " + sensors.get(i).getType());
+            listSensorType.put(sensors.get(i).getType(), true);
         }
 
         addPreferencesFromResource(R.xml.aware_preferences);
@@ -103,10 +108,12 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         REQUIRED_PERMISSIONS.add(Manifest.permission.READ_PHONE_STATE);
 
         permissions_ok = true;
-        for (String p : REQUIRED_PERMISSIONS) {
-            if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                permissions_ok = false;
-                break;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            for (String p : REQUIRED_PERMISSIONS) {
+                if (PermissionChecker.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+                    permissions_ok = false;
+                    break;
+                }
             }
         }
     }
@@ -240,9 +247,9 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                         Drawable category_icon = ContextCompat.getDrawable(getApplicationContext(), icon_id);
                         if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
                             category_icon.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getApplicationContext(), R.color.accent), PorterDuff.Mode.SRC_IN));
+                            parent.setIcon(category_icon);
                             onContentChanged();
                         }
-                        if (category_icon != null) parent.setIcon(category_icon);
                     } catch (NoSuchFieldException | IllegalAccessException e) {
                     }
                 } else {
@@ -253,9 +260,9 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                         Drawable category_icon = ContextCompat.getDrawable(getApplicationContext(), icon_id);
                         if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
                             category_icon.clearColorFilter();
+                            parent.setIcon(category_icon);
                             onContentChanged();
                         }
-                        if (category_icon != null) parent.setIcon(category_icon);
                     } catch (NoSuchFieldException | IllegalAccessException e) {
                     }
                 }
@@ -273,13 +280,8 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
             permissionsHandler.putStringArrayListExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
             permissionsHandler.putExtra(PermissionsHandler.EXTRA_REDIRECT_ACTIVITY, getPackageName() + "/" + getClass().getName());
             startActivityForResult(permissionsHandler, PermissionsHandler.RC_PERMISSIONS);
-            finish();
-            return;
         } else {
-            Intent startAware = new Intent(this, Aware.class);
-            startService(startAware);
 
-            prefs = getSharedPreferences("com.aware.phone", Context.MODE_PRIVATE);
             if (prefs.getAll().isEmpty() && Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID).length() == 0) {
                 PreferenceManager.setDefaultValues(getApplicationContext(), "com.aware.phone", Context.MODE_PRIVATE, com.aware.R.xml.aware_preferences, true);
                 prefs.edit().commit();
@@ -303,10 +305,11 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                 Aware.setSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER, "https://api.awareframework.com/index.php");
             }
 
-            for (String[] optionalSensor : optionalSensors) {
-                Preference pref = findPreference(optionalSensor[0]);
+            Set<String> keys = optionalSensors.keySet();
+            for (String optionalSensor : keys) {
+                Preference pref = findPreference(optionalSensor);
                 PreferenceGroup parent = getPreferenceParent(pref);
-                if (pref.getKey().equalsIgnoreCase(optionalSensor[0]) && !listSensorType.containsKey(optionalSensor[1]))
+                if (pref.getKey().equalsIgnoreCase(optionalSensor) && !listSensorType.containsKey(optionalSensors.get(optionalSensor)))
                     parent.setEnabled(false);
             }
 
@@ -362,11 +365,17 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                     findPreference(Aware_Preferences.MQTT_PASSWORD),
                     findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
                     findPreference(Aware_Preferences.MQTT_QOS),
-                    findPreference(Aware_Preferences.MQTT_PROTOCOL),
                     findPreference(Aware_Preferences.STATUS_WEBSERVICE),
                     findPreference(Aware_Preferences.WEBSERVICE_SERVER),
                     findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
-                    findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA)
+                    findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
+                    findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
+                    findPreference(Aware_Preferences.WEBSERVICE_SILENT),
+                    findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
+                    findPreference(Aware_Preferences.REMIND_TO_CHARGE),
+                    findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
+                    findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
+                    findPreference(Aware_Preferences.DEBUG_DB_SLOW)
             );
         }
     }
@@ -383,7 +392,8 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         protected Boolean doInBackground(Void... params) {
             // Download the certificate, and block since we are already running in background
             // and we need the certificate immediately.
-            SSLManager.downloadCertificate(getApplicationContext(), "api.awareframework.com", true);
+            Uri server_url = Uri.parse("https://api.awareframework.com/index.php");
+            SSLManager.downloadCertificate(getApplicationContext(), server_url.getHost(), true);
 
             //Ping AWARE's server with getApplicationContext() device's information for framework's statistics log
             Hashtable<String, String> device_ping = new Hashtable<>();

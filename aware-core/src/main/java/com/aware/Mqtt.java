@@ -146,11 +146,6 @@ public class Mqtt extends Aware_Sensor implements MqttCallback {
 
     private static MqttClient MQTT_CLIENT = null;
 
-    /**
-     * Activity-Service binder
-     */
-    private final IBinder serviceBinder = new ServiceBinder();
-
     @Override
     public void connectionLost(Throwable throwable) {
         if (Aware.DEBUG)
@@ -224,27 +219,9 @@ public class Mqtt extends Aware_Sensor implements MqttCallback {
             Log.d(TAG, "MQTT: Message delivered. Delivery Token: " + iMqttDeliveryToken.toString());
     }
 
-    public class ServiceBinder extends Binder {
-        Mqtt getService() {
-            return Mqtt.getService();
-        }
-    }
-
     @Override
     public IBinder onBind(Intent intent) {
-        return serviceBinder;
-    }
-
-    private static Mqtt mqttSrv = Mqtt.getService();
-
-    /**
-     * Singleton instance to service
-     *
-     * @return Mqtt mqttSrv
-     */
-    public static Mqtt getService() {
-        if (mqttSrv == null) mqttSrv = new Mqtt();
-        return mqttSrv;
+        return null;
     }
 
     private static final MQTTReceiver mqttReceiver = new MQTTReceiver();
@@ -348,24 +325,27 @@ public class Mqtt extends Aware_Sensor implements MqttCallback {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        super.onStartCommand(intent, flags, startId);
 
-        DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
+        if (PERMISSIONS_OK) {
+            DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
 
-        if (Aware.is_watch(this)) {
-            Log.d(TAG, "This is an Android Wear device, we can't connect to MQTT. Disabling it!");
-            Aware.setSetting(this, Aware_Preferences.STATUS_MQTT, false);
-            stopSelf();
-        } else {
-            Aware.setSetting(this, Aware_Preferences.STATUS_MQTT, true);
-            if (MQTT_CLIENT != null && MQTT_CLIENT.isConnected()) {
-                if (DEBUG)
-                    Log.d(TAG, "Connected to MQTT: Client ID=" + MQTT_CLIENT.getClientId() + "\n Server:" + MQTT_CLIENT.getServerURI());
-            } else if (MQTT_CLIENT == null) {
-                initializeMQTT();
+            if (Aware.is_watch(this)) {
+                Log.d(TAG, "This is an Android Wear device, we can't connect to MQTT. Disabling it!");
+                Aware.setSetting(this, Aware_Preferences.STATUS_MQTT, false);
+                stopSelf();
+            } else {
+                Aware.setSetting(this, Aware_Preferences.STATUS_MQTT, true);
+                if (MQTT_CLIENT != null && MQTT_CLIENT.isConnected()) {
+                    if (DEBUG)
+                        Log.d(TAG, "Connected to MQTT: Client ID=" + MQTT_CLIENT.getClientId() + "\n Server:" + MQTT_CLIENT.getServerURI());
+                } else if (MQTT_CLIENT == null) {
+                    initializeMQTT();
+                }
             }
         }
 
-        return super.onStartCommand(intent, flags, startId);
+        return START_STICKY;
     }
 
     @Override
@@ -404,13 +384,15 @@ public class Mqtt extends Aware_Sensor implements MqttCallback {
         MQTT_PASSWORD = Aware.getSetting(getApplicationContext(), Aware_Preferences.MQTT_PASSWORD);
         MQTT_KEEPALIVE = (Aware.getSetting(getApplicationContext(), Aware_Preferences.MQTT_KEEP_ALIVE).length() > 0 ? Aware.getSetting(getApplicationContext(), Aware_Preferences.MQTT_KEEP_ALIVE) : "600");
         MQTT_QoS = Aware.getSetting(getApplicationContext(), Aware_Preferences.MQTT_QOS);
-        MQTT_PROTOCOL = Aware.getSetting(getApplicationContext(), Aware_Preferences.MQTT_PROTOCOL).length() > 0 ? Aware.getSetting(getApplicationContext(), Aware_Preferences.MQTT_PROTOCOL) : "tcp";
+
+        if (Integer.parseInt(MQTT_PORT) == 1883) MQTT_PROTOCOL = "tcp";
+        if (Integer.parseInt(MQTT_PORT) == 8883) MQTT_PROTOCOL = "ssl";
 
         String MQTT_URL = MQTT_PROTOCOL + "://" + MQTT_SERVER + ":" + MQTT_PORT;
 
-        if (MQTT_MESSAGES_PERSISTENCE == null) {
+        if (MQTT_MESSAGES_PERSISTENCE == null)
             MQTT_MESSAGES_PERSISTENCE = new MemoryPersistence();
-        }
+
 
         MqttConnectOptions MQTT_OPTIONS = new MqttConnectOptions();
         MQTT_OPTIONS.setCleanSession(false); //resume pending messages from server

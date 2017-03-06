@@ -448,13 +448,6 @@ public class Aware_Preferences {
     public static final String MQTT_QOS = "mqtt_qos";
 
     /**
-     * MQTT Connection protocol (default = tcp)
-     * tcp - unsecure
-     * ssl - secure
-     */
-    public static final String MQTT_PROTOCOL = "mqtt_protocol";
-
-    /**
      * Activate/deactivate AWARE webservice (boolean)
      */
     public static final String STATUS_WEBSERVICE = "status_webservice";
@@ -542,4 +535,9 @@ public class Aware_Preferences {
      * Activate/deactivate significant motion sensing
      */
     public static final String STATUS_SIGNIFICANT_MOTION = "status_significant_motion";
+
+    /**
+     * If in a study, remind the user to charge the phone when at 15%.
+     */
+    public static final String REMIND_TO_CHARGE = "remind_to_charge";
 }

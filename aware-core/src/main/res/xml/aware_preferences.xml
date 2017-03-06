@@ -702,10 +702,11 @@
                 android:title="MQTT server" />
 
             <EditTextPreference
-                android:defaultValue="8883"
+                android:defaultValue="1883"
                 android:inputType="number"
                 android:key="mqtt_port"
                 android:persistent="true"
+                android:summary="Non-encrypted: 1883, encrypted: 8883"
                 android:title="MQTT port" />
 
             <EditTextPreference
@@ -736,12 +737,6 @@
                 android:persistent="true"
                 android:summary="0 - No guarantee, 1 - At least once, 2 - Exactly once (default = 2)"
                 android:title="MQTT QoS" />
-
-            <EditTextPreference
-                android:defaultValue="ssl"
-                android:key="mqtt_protocol"
-                android:persistent="true"
-                android:title="Connection protocol (tcp/ssl)" />
 
         </PreferenceScreen>
         <PreferenceScreen
@@ -793,6 +788,21 @@
                 android:persistent="true"
                 android:summary="%s"
                 android:title="Clean-up old data?" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:key="webservice_silent"
+                android:persistent="true"
+                android:summary="Disable data sync notifications"
+                android:title="Quiet sync" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:key="remind_to_charge"
+                android:persistent="true"
+                android:summary="Remind to charge when 15%"
+                android:title="Battery reminder" />
+
         </PreferenceScreen>
     </PreferenceCategory>
 
@@ -809,15 +819,16 @@
                 android:defaultValue="true"
                 android:key="debug_flag"
                 android:persistent="true"
-                android:title="Override logcat tag" />
+                android:title="Debugging"
+                android:summary="Show messages in logcat" />
 
             <EditTextPreference
                 android:defaultValue="AWARE"
                 android:dependency="debug_flag"
                 android:key="debug_tag"
                 android:persistent="true"
-                android:summary="ADB filter (default = AWARE)"
-                android:title="ADB logcat tag" />
+                android:summary="Change logcat tag for debug filters (default = AWARE)"
+                android:title="Logcat TAG" />
 
             <CheckBoxPreference
                 android:defaultValue="false"
@@ -840,12 +851,6 @@
                 android:summary="WARNING: This may cause problems with some sensors or plugins if they rely on history data (e.g., battery charges, discharges, ...)"
                 android:title="Wipe data on upload" />
 
-            <CheckBoxPreference
-                android:defaultValue="true"
-                android:key="webservice_silent"
-                android:persistent="true"
-                android:summary="Disable data sync notifications"
-                android:title="Quiet sync" />
         </PreferenceScreen>
 
     </PreferenceCategory>
