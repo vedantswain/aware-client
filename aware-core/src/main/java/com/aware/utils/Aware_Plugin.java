@@ -35,12 +35,12 @@ public class Aware_Plugin extends Service {
     /**
      * Debug tag for this plugin
      */
-    public static String TAG = "AWARE Plugin";
+    public String TAG = "AWARE Plugin";
 
     /**
      * Debug flag for this plugin
      */
-    public static boolean DEBUG = false;
+    public boolean DEBUG = false;
 
     /**
      * Context producer for this plugin
@@ -80,7 +80,7 @@ public class Aware_Plugin extends Service {
     /**
      * Indicates if permissions were accepted OK
      */
-    public boolean PERMISSIONS_OK;
+    public boolean PERMISSIONS_OK = true;
 
     @Override
     public void onCreate() {
@@ -115,16 +115,16 @@ public class Aware_Plugin extends Service {
             Intent permissions = new Intent(this, PermissionsHandler.class);
             permissions.putExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
             permissions.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            permissions.putExtra(PermissionsHandler.EXTRA_REDIRECT_SERVICE, getPackageName() + "/" + getClass().getName()); //restarts plugin once permissions are accepted
+            permissions.putExtra(PermissionsHandler.EXTRA_REDIRECT_SERVICE, getApplicationContext().getPackageName() + "/" + getClass().getName()); //restarts plugin once permissions are accepted
             startActivity(permissions);
         } else {
 
-            //Set plugin as enabled
-            PluginsManager.enablePlugin(getApplicationContext(), getPackageName());
+            PERMISSIONS_OK = true;
 
             if (Aware.getSetting(this, Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
                 SSLManager.handleUrl(getApplicationContext(), Aware.getSetting(this, Aware_Preferences.WEBSERVICE_SERVER), true);
             }
+
             Aware.debug(this, "active: " + getClass().getName() + " package: " + getPackageName());
         }
         return super.onStartCommand(intent, flags, startId);
@@ -138,9 +138,7 @@ public class Aware_Plugin extends Service {
             Aware.debug(this, "destroyed: " + getClass().getName() + " package: " + getPackageName());
         }
 
-        if (contextBroadcaster != null) {
-            unregisterReceiver(contextBroadcaster);
-        }
+        if (contextBroadcaster != null) unregisterReceiver(contextBroadcaster);
     }
 
     /**
@@ -171,7 +169,7 @@ public class Aware_Plugin extends Service {
                     CONTEXT_PRODUCER.onContext();
                 }
             }
-            if (intent.getAction().equals(Aware.ACTION_AWARE_SYNC_DATA) && Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
+            if (intent.getAction().equals(Aware.ACTION_AWARE_SYNC_DATA) && Aware.getSetting(context, Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
                 if (DATABASE_TABLES != null && TABLES_FIELDS != null && CONTEXT_URIS != null) {
                     for (int i = 0; i < DATABASE_TABLES.length; i++) {
                         Intent webserviceHelper = new Intent(context, WebserviceHelper.class);
@@ -202,7 +200,12 @@ public class Aware_Plugin extends Service {
             }
             if (intent.getAction().equals(Aware.ACTION_AWARE_STOP_PLUGINS)) {
                 if (Aware.DEBUG) Log.d(TAG, TAG + " stopped");
-                stopSelf();
+                try {
+                    Intent self = new Intent(context, Class.forName(context.getApplicationContext().getClass().getName()));
+                    context.stopService(self);
+                } catch (ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }

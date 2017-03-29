@@ -33,12 +33,12 @@ public class Aware_Sensor extends Service {
     /**
      * Debug tag for this sensor
      */
-    public static String TAG = "AWARE Sensor";
+    public String TAG = "AWARE Sensor";
 
     /**
      * Debug flag for this sensor
      */
-    public static boolean DEBUG = false;
+    public boolean DEBUG = false;
 
     public ContextProducer CONTEXT_PRODUCER = null;
 
@@ -65,7 +65,7 @@ public class Aware_Sensor extends Service {
     /**
      * Indicates if permissions were accepted OK
      */
-    public boolean PERMISSIONS_OK;
+    public boolean PERMISSIONS_OK = true;
 
     /**
      * Interface to share context with other applications/addons<br/>
@@ -113,6 +113,9 @@ public class Aware_Sensor extends Service {
             permissions.putExtra(PermissionsHandler.EXTRA_REDIRECT_SERVICE, getPackageName() + "/" + getClass().getName()); //restarts plugin once permissions are accepted
             startActivity(permissions);
         } else {
+
+            PERMISSIONS_OK = true;
+
             if (Aware.getSetting(this, Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
                 SSLManager.handleUrl(getApplicationContext(), Aware.getSetting(this, Aware_Preferences.WEBSERVICE_SERVER), true);
             }
@@ -130,9 +133,7 @@ public class Aware_Sensor extends Service {
         }
 
         //Unregister Context Broadcaster
-        if (contextBroadcaster != null) {
-            unregisterReceiver(contextBroadcaster);
-        }
+        if (contextBroadcaster != null) unregisterReceiver(contextBroadcaster);
     }
 
     /**
@@ -184,7 +185,12 @@ public class Aware_Sensor extends Service {
             }
             if (intent.getAction().equals(Aware.ACTION_AWARE_STOP_SENSORS)) {
                 if (Aware.DEBUG) Log.d(TAG, TAG + " stopped");
-                stopSelf();
+                try {
+                    Intent self = new Intent(context, Class.forName(context.getApplicationContext().getClass().getName()));
+                    context.stopService(self);
+                } catch (ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
             }
 
         }

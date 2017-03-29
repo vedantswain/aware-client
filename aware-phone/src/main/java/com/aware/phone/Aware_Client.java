@@ -19,6 +19,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.preference.CheckBoxPreference;
 import android.preference.EditTextPreference;
 import android.preference.ListPreference;
@@ -26,9 +27,11 @@ import android.preference.Preference;
 import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
+import android.provider.Settings;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.PermissionChecker;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.ViewGroup;
 import android.widget.ListAdapter;
 import android.widget.Toast;
@@ -69,9 +72,6 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
 
         prefs = getSharedPreferences("com.aware.phone", Context.MODE_PRIVATE);
 
-        Intent startAware = new Intent(getApplicationContext(), Aware.class);
-        startService(startAware);
-
         optionalSensors.put(Aware_Preferences.STATUS_ACCELEROMETER, Sensor.TYPE_ACCELEROMETER);
         optionalSensors.put(Aware_Preferences.STATUS_SIGNIFICANT_MOTION, Sensor.TYPE_ACCELEROMETER);
         optionalSensors.put(Aware_Preferences.STATUS_BAROMETER, Sensor.TYPE_PRESSURE);
@@ -103,14 +103,18 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         REQUIRED_PERMISSIONS.add(Manifest.permission.ACCESS_FINE_LOCATION);
         REQUIRED_PERMISSIONS.add(Manifest.permission.READ_PHONE_STATE);
 
-        permissions_ok = true;
+        boolean PERMISSIONS_OK = true;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             for (String p : REQUIRED_PERMISSIONS) {
-                if (PermissionChecker.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                    permissions_ok = false;
+                if (PermissionChecker.checkSelfPermission(this, p) != PermissionChecker.PERMISSION_GRANTED) {
+                    PERMISSIONS_OK = false;
                     break;
                 }
             }
+        }
+        if (PERMISSIONS_OK) {
+            Intent aware = new Intent(this, Aware.class);
+            startService(aware);
         }
     }
 
@@ -157,6 +161,9 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
 
             //update the parent to show active/inactive
             new SettingsSync().execute(pref);
+
+            //Start/Stop sensor
+            Aware.startAWARE(getApplicationContext());
         }
         if (EditTextPreference.class.isInstance(pref)) {
             EditTextPreference text = (EditTextPreference) findPreference(key);
@@ -167,8 +174,6 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
             ListPreference list = (ListPreference) findPreference(key);
             list.setSummary(list.getEntry());
         }
-
-        Aware.startAWARE(getApplicationContext());
     }
 
     private class SettingsSync extends AsyncTask<Preference, Preference, Void> {
@@ -271,11 +276,25 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
     protected void onResume() {
         super.onResume();
 
+        permissions_ok = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            for (String p : REQUIRED_PERMISSIONS) {
+                if (PermissionChecker.checkSelfPermission(this, p) != PermissionChecker.PERMISSION_GRANTED) {
+                    permissions_ok = false;
+                    break;
+                }
+            }
+        }
+
         if (!permissions_ok) {
+            Log.d(Aware.TAG, "Requesting permissions...");
+
             Intent permissionsHandler = new Intent(this, PermissionsHandler.class);
             permissionsHandler.putStringArrayListExtra(PermissionsHandler.EXTRA_REQUIRED_PERMISSIONS, REQUIRED_PERMISSIONS);
             permissionsHandler.putExtra(PermissionsHandler.EXTRA_REDIRECT_ACTIVITY, getPackageName() + "/" + getClass().getName());
-            startActivityForResult(permissionsHandler, PermissionsHandler.RC_PERMISSIONS);
+            permissionsHandler.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(permissionsHandler);
+
         } else {
 
             if (prefs.getAll().isEmpty() && Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID).length() == 0) {
@@ -323,56 +342,112 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
 
             prefs.registerOnSharedPreferenceChangeListener(this);
 
-            new SettingsSync().execute(
-                    findPreference(Aware_Preferences.DEVICE_ID),
-                    findPreference(Aware_Preferences.DEVICE_LABEL),
-                    findPreference(Aware_Preferences.AWARE_VERSION),
-                    findPreference(Aware_Preferences.STATUS_ACCELEROMETER),
-                    findPreference(Aware_Preferences.STATUS_APPLICATIONS),
-                    findPreference(Aware_Preferences.STATUS_BAROMETER),
-                    findPreference(Aware_Preferences.STATUS_BATTERY),
-                    findPreference(Aware_Preferences.STATUS_BLUETOOTH),
-                    findPreference(Aware_Preferences.STATUS_COMMUNICATION_EVENTS),
-                    findPreference(Aware_Preferences.STATUS_CALLS),
-                    findPreference(Aware_Preferences.STATUS_MESSAGES),
-                    findPreference(Aware_Preferences.STATUS_ESM),
-                    findPreference(Aware_Preferences.STATUS_GRAVITY),
-                    findPreference(Aware_Preferences.STATUS_GYROSCOPE),
-                    findPreference(Aware_Preferences.STATUS_LOCATION_NETWORK),
-                    findPreference(Aware_Preferences.STATUS_LOCATION_GPS),
-                    findPreference(Aware_Preferences.STATUS_LIGHT),
-                    findPreference(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER),
-                    findPreference(Aware_Preferences.STATUS_NETWORK_EVENTS),
-                    findPreference(Aware_Preferences.STATUS_NETWORK_TRAFFIC),
-                    findPreference(Aware_Preferences.STATUS_MAGNETOMETER),
-                    findPreference(Aware_Preferences.STATUS_PROCESSOR),
-                    findPreference(Aware_Preferences.STATUS_TIMEZONE),
-                    findPreference(Aware_Preferences.STATUS_PROXIMITY),
-                    findPreference(Aware_Preferences.STATUS_ROTATION),
-                    findPreference(Aware_Preferences.STATUS_SCREEN),
-                    findPreference(Aware_Preferences.STATUS_SIGNIFICANT_MOTION),
-                    findPreference(Aware_Preferences.STATUS_TEMPERATURE),
-                    findPreference(Aware_Preferences.STATUS_TELEPHONY),
-                    findPreference(Aware_Preferences.STATUS_WIFI),
-                    findPreference(Aware_Preferences.STATUS_MQTT),
-                    findPreference(Aware_Preferences.MQTT_SERVER),
-                    findPreference(Aware_Preferences.MQTT_PORT),
-                    findPreference(Aware_Preferences.MQTT_USERNAME),
-                    findPreference(Aware_Preferences.MQTT_PASSWORD),
-                    findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
-                    findPreference(Aware_Preferences.MQTT_QOS),
-                    findPreference(Aware_Preferences.STATUS_WEBSERVICE),
-                    findPreference(Aware_Preferences.WEBSERVICE_SERVER),
-                    findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
-                    findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
-                    findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
-                    findPreference(Aware_Preferences.WEBSERVICE_SILENT),
-                    findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
-                    findPreference(Aware_Preferences.REMIND_TO_CHARGE),
-                    findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
-                    findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
-                    findPreference(Aware_Preferences.DEBUG_DB_SLOW)
-            );
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+                new SettingsSync().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, //use all cores available to process UI faster
+                        findPreference(Aware_Preferences.DEVICE_ID),
+                        findPreference(Aware_Preferences.DEVICE_LABEL),
+                        findPreference(Aware_Preferences.AWARE_VERSION),
+                        findPreference(Aware_Preferences.STATUS_ACCELEROMETER),
+                        findPreference(Aware_Preferences.STATUS_APPLICATIONS),
+                        findPreference(Aware_Preferences.STATUS_BAROMETER),
+                        findPreference(Aware_Preferences.STATUS_BATTERY),
+                        findPreference(Aware_Preferences.STATUS_BLUETOOTH),
+                        findPreference(Aware_Preferences.STATUS_COMMUNICATION_EVENTS),
+                        findPreference(Aware_Preferences.STATUS_CALLS),
+                        findPreference(Aware_Preferences.STATUS_MESSAGES),
+                        findPreference(Aware_Preferences.STATUS_ESM),
+                        findPreference(Aware_Preferences.STATUS_GRAVITY),
+                        findPreference(Aware_Preferences.STATUS_GYROSCOPE),
+                        findPreference(Aware_Preferences.STATUS_LOCATION_NETWORK),
+                        findPreference(Aware_Preferences.STATUS_LOCATION_GPS),
+                        findPreference(Aware_Preferences.STATUS_LIGHT),
+                        findPreference(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER),
+                        findPreference(Aware_Preferences.STATUS_NETWORK_EVENTS),
+                        findPreference(Aware_Preferences.STATUS_NETWORK_TRAFFIC),
+                        findPreference(Aware_Preferences.STATUS_MAGNETOMETER),
+                        findPreference(Aware_Preferences.STATUS_PROCESSOR),
+                        findPreference(Aware_Preferences.STATUS_TIMEZONE),
+                        findPreference(Aware_Preferences.STATUS_PROXIMITY),
+                        findPreference(Aware_Preferences.STATUS_ROTATION),
+                        findPreference(Aware_Preferences.STATUS_SCREEN),
+                        findPreference(Aware_Preferences.STATUS_SIGNIFICANT_MOTION),
+                        findPreference(Aware_Preferences.STATUS_TEMPERATURE),
+                        findPreference(Aware_Preferences.STATUS_TELEPHONY),
+                        findPreference(Aware_Preferences.STATUS_WIFI),
+                        findPreference(Aware_Preferences.STATUS_MQTT),
+                        findPreference(Aware_Preferences.MQTT_SERVER),
+                        findPreference(Aware_Preferences.MQTT_PORT),
+                        findPreference(Aware_Preferences.MQTT_USERNAME),
+                        findPreference(Aware_Preferences.MQTT_PASSWORD),
+                        findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
+                        findPreference(Aware_Preferences.MQTT_QOS),
+                        findPreference(Aware_Preferences.STATUS_WEBSERVICE),
+                        findPreference(Aware_Preferences.WEBSERVICE_SERVER),
+                        findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
+                        findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
+                        findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
+                        findPreference(Aware_Preferences.WEBSERVICE_SILENT),
+                        findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
+                        findPreference(Aware_Preferences.REMIND_TO_CHARGE),
+                        findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
+                        findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
+                        findPreference(Aware_Preferences.DEBUG_DB_SLOW)
+                );
+            } else {
+                new SettingsSync().execute(
+                        findPreference(Aware_Preferences.DEVICE_ID),
+                        findPreference(Aware_Preferences.DEVICE_LABEL),
+                        findPreference(Aware_Preferences.AWARE_VERSION),
+                        findPreference(Aware_Preferences.STATUS_ACCELEROMETER),
+                        findPreference(Aware_Preferences.STATUS_APPLICATIONS),
+                        findPreference(Aware_Preferences.STATUS_BAROMETER),
+                        findPreference(Aware_Preferences.STATUS_BATTERY),
+                        findPreference(Aware_Preferences.STATUS_BLUETOOTH),
+                        findPreference(Aware_Preferences.STATUS_COMMUNICATION_EVENTS),
+                        findPreference(Aware_Preferences.STATUS_CALLS),
+                        findPreference(Aware_Preferences.STATUS_MESSAGES),
+                        findPreference(Aware_Preferences.STATUS_ESM),
+                        findPreference(Aware_Preferences.STATUS_GRAVITY),
+                        findPreference(Aware_Preferences.STATUS_GYROSCOPE),
+                        findPreference(Aware_Preferences.STATUS_LOCATION_NETWORK),
+                        findPreference(Aware_Preferences.STATUS_LOCATION_GPS),
+                        findPreference(Aware_Preferences.STATUS_LIGHT),
+                        findPreference(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER),
+                        findPreference(Aware_Preferences.STATUS_NETWORK_EVENTS),
+                        findPreference(Aware_Preferences.STATUS_NETWORK_TRAFFIC),
+                        findPreference(Aware_Preferences.STATUS_MAGNETOMETER),
+                        findPreference(Aware_Preferences.STATUS_PROCESSOR),
+                        findPreference(Aware_Preferences.STATUS_TIMEZONE),
+                        findPreference(Aware_Preferences.STATUS_PROXIMITY),
+                        findPreference(Aware_Preferences.STATUS_ROTATION),
+                        findPreference(Aware_Preferences.STATUS_SCREEN),
+                        findPreference(Aware_Preferences.STATUS_SIGNIFICANT_MOTION),
+                        findPreference(Aware_Preferences.STATUS_TEMPERATURE),
+                        findPreference(Aware_Preferences.STATUS_TELEPHONY),
+                        findPreference(Aware_Preferences.STATUS_WIFI),
+                        findPreference(Aware_Preferences.STATUS_MQTT),
+                        findPreference(Aware_Preferences.MQTT_SERVER),
+                        findPreference(Aware_Preferences.MQTT_PORT),
+                        findPreference(Aware_Preferences.MQTT_USERNAME),
+                        findPreference(Aware_Preferences.MQTT_PASSWORD),
+                        findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
+                        findPreference(Aware_Preferences.MQTT_QOS),
+                        findPreference(Aware_Preferences.STATUS_WEBSERVICE),
+                        findPreference(Aware_Preferences.WEBSERVICE_SERVER),
+                        findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
+                        findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
+                        findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
+                        findPreference(Aware_Preferences.WEBSERVICE_SILENT),
+                        findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
+                        findPreference(Aware_Preferences.REMIND_TO_CHARGE),
+                        findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
+                        findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
+                        findPreference(Aware_Preferences.DEBUG_DB_SLOW)
+                );
+            }
+
+            //Ask the user to add AWARE to the battery optimization ignored settings
+            Aware.isBatteryOptimizationIgnored(getApplicationContext(), getPackageName());
         }
     }
 
