@@ -11,16 +11,12 @@ import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
-import android.os.Environment;
 import android.provider.BaseColumns;
 import android.util.Log;
 
 import com.aware.Aware;
-import com.aware.BuildConfig;
-import com.aware.Installations;
 import com.aware.utils.DatabaseHelper;
 
-import java.io.File;
 import java.util.HashMap;
 
 /**
@@ -100,7 +96,7 @@ public class Installations_Provider extends ContentProvider {
      * Delete entry from the database
      */
     @Override
-    public int delete(Uri uri, String selection, String[] selectionArgs) {
+    public synchronized int delete(Uri uri, String selection, String[] selectionArgs) {
 
         initialiseDatabase();
 
@@ -121,7 +117,7 @@ public class Installations_Provider extends ContentProvider {
         database.setTransactionSuccessful();
         database.endTransaction();
 
-        getContext().getContentResolver().notifyChange(uri, null);
+        getContext().getContentResolver().notifyChange(uri, null, false);
         return count;
     }
 
@@ -141,7 +137,7 @@ public class Installations_Provider extends ContentProvider {
      * Insert entry to the database
      */
     @Override
-    public Uri insert(Uri uri, ContentValues initialValues) {
+    public synchronized Uri insert(Uri uri, ContentValues initialValues) {
 
         initialiseDatabase();
 
@@ -159,8 +155,7 @@ public class Installations_Provider extends ContentProvider {
                 if (installations_id > 0) {
                     Uri installationsUri = ContentUris.withAppendedId(
                             Installations_Data.CONTENT_URI, installations_id);
-                    getContext().getContentResolver().notifyChange(
-                            installationsUri, null);
+                    getContext().getContentResolver().notifyChange(installationsUri, null, false);
                     return installationsUri;
                 }
                 database.endTransaction();
@@ -169,6 +164,15 @@ public class Installations_Provider extends ContentProvider {
                 database.endTransaction();
                 throw new IllegalArgumentException("Unknown URI " + uri);
         }
+    }
+
+    /**
+     * Returns the provider authority that is dynamic
+     * @return
+     */
+    public static String getAuthority(Context context) {
+        AUTHORITY = context.getPackageName() + ".provider.installations";
+        return AUTHORITY;
     }
 
     @Override
@@ -228,7 +232,7 @@ public class Installations_Provider extends ContentProvider {
      * Update application on the database
      */
     @Override
-    public int update(Uri uri, ContentValues values, String selection,
+    public synchronized int update(Uri uri, ContentValues values, String selection,
                       String[] selectionArgs) {
 
         initialiseDatabase();
@@ -249,7 +253,7 @@ public class Installations_Provider extends ContentProvider {
         database.setTransactionSuccessful();
         database.endTransaction();
 
-        getContext().getContentResolver().notifyChange(uri, null);
+        getContext().getContentResolver().notifyChange(uri, null, false);
         return count;
     }
 }

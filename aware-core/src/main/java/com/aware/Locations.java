@@ -1,27 +1,21 @@
 package com.aware;
 
 import android.Manifest;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteException;
 import android.location.GpsStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.net.Uri;
-import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.PermissionChecker;
 import android.util.Log;
 
 import com.aware.providers.Locations_Provider;
 import com.aware.providers.Locations_Provider.Locations_Data;
-import com.aware.ui.PermissionsHandler;
 import com.aware.utils.Aware_Sensor;
 
 /**
@@ -106,6 +100,8 @@ public class Locations extends Aware_Sensor implements LocationListener {
         }
     };
 
+    public String TAG = "AWARE Sensor Location";
+
     /**
      * Broadcasted event: New location available
      */
@@ -133,6 +129,7 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
     private static int FREQUENCY_NETWORK = -1;
     private static int FREQUENCY_GPS = -1;
+    private static int FREQUENCY_PASSIVE = -1;
 
     /**
      * Geofencing function.  Tests if a lat and lon is allowed, based
@@ -149,7 +146,7 @@ public class Locations extends Aware_Sensor implements LocationListener {
         // Separate geofence string by spaces, tabs, and semicolon
         String[] fences = geofences.split("[ \t;]+");
         // Test each part separately, if any part is true, return true.
-        for (Integer i=0 ; i<fences.length ; i++) {
+        for (Integer i = 0; i < fences.length; i++) {
             String[] parts = fences[i].split(",");
             // Circular fences.  Distance in METERS.
             if (parts.length == 3) {
@@ -162,18 +159,18 @@ public class Locations extends Aware_Sensor implements LocationListener {
                 }
             }
             // Rectungular fence
-            if (parts[0].equals("rect") && parts.length==5) {
+            if (parts[0].equals("rect") && parts.length == 5) {
                 Double lat1 = Double.parseDouble(parts[1]);
                 Double lon1 = Double.parseDouble(parts[2]);
                 Double lat2 = Double.parseDouble(parts[3]);
                 Double lon2 = Double.parseDouble(parts[4]);
                 // Be safe in case order of xxx1 and xxx2 are reversed,
                 // so test twice.  Is there a better way to do this?
-                if (      ((lat1 < lat0 && lat0 < lat2)
+                if (((lat1 < lat0 && lat0 < lat2)
                         || (lat2 < lat0 && lat0 < lat1))
-                    &&    ((lon1 < lon0 && lon0 < lon2)
+                        && ((lon1 < lon0 && lon0 < lon2)
                         || (lon2 < lon0 && lon0 < lon1))
-                       ) {
+                        ) {
                     if (Aware.DEBUG) Log.d(TAG, "Location geofence: within " + fences[i]);
                     return true;
                 }
@@ -192,11 +189,22 @@ public class Locations extends Aware_Sensor implements LocationListener {
         Double dLat = Math.toRadians(lat2 - lat1);
         Double dLon = Math.toRadians(lon2 - lon1);
         Double a = (Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                    Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                    Math.sin(dLon / 2) * Math.sin(dLon / 2));
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2));
         Double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         Double d = EARTH_RADIUS * c;
         return d;
+    }
+
+    private static Locations.AWARESensorObserver awareSensor;
+    public static void setSensorObserver(Locations.AWARESensorObserver observer) {
+        awareSensor = observer;
+    }
+    public static Locations.AWARESensorObserver getSensorObserver() {
+        return awareSensor;
+    }
+    public interface AWARESensorObserver {
+        void onLocationChanged(ContentValues data);
     }
 
     @Override
@@ -256,11 +264,9 @@ public class Locations extends Aware_Sensor implements LocationListener {
     public void onCreate() {
         super.onCreate();
 
-        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        AUTHORITY = Locations_Provider.getAuthority(this);
 
-        DATABASE_TABLES = Locations_Provider.DATABASE_TABLES;
-        TABLES_FIELDS = Locations_Provider.TABLES_FIELDS;
-        CONTEXT_URIS = new Uri[]{Locations_Data.CONTENT_URI};
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
         REQUIRED_PERMISSIONS.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         REQUIRED_PERMISSIONS.add(Manifest.permission.ACCESS_FINE_LOCATION);
@@ -274,6 +280,15 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
         if (PERMISSIONS_OK) locationManager.removeUpdates(this);
         locationManager.removeGpsStatusListener(gps_status_listener);
+
+        if (Aware.isStudy(this) && Aware.isSyncEnabled(this, Locations_Provider.getAuthority(this))) {
+            ContentResolver.setSyncAutomatically(Aware.getAWAREAccount(this), Locations_Provider.getAuthority(this), false);
+            ContentResolver.removePeriodicSync(
+                    Aware.getAWAREAccount(this),
+                    Locations_Provider.getAuthority(this),
+                    Bundle.EMPTY
+            );
+        }
 
         if (Aware.DEBUG) Log.d(TAG, "Locations service terminated...");
     }
@@ -315,7 +330,8 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
                         FREQUENCY_GPS = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LOCATION_GPS));
                     }
-                    if (Aware.DEBUG) Log.d(TAG, "Location tracking with GPS is active: " + FREQUENCY_GPS + "s");
+                    if (Aware.DEBUG)
+                        Log.d(TAG, "Location tracking with GPS is active: " + FREQUENCY_GPS + "s");
                 } else {
                     ContentValues rowData = new ContentValues();
                     rowData.put(Locations_Data.TIMESTAMP, System.currentTimeMillis());
@@ -344,7 +360,7 @@ public class Locations extends Aware_Sensor implements LocationListener {
                     }
                     if (Aware.DEBUG)
                         Log.d(TAG, "Location tracking with Network is active: " + FREQUENCY_NETWORK + "s");
-                }else{
+                } else {
                     ContentValues rowData = new ContentValues();
                     rowData.put(Locations_Data.TIMESTAMP, System.currentTimeMillis());
                     rowData.put(Locations_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
@@ -360,6 +376,48 @@ public class Locations extends Aware_Sensor implements LocationListener {
                     if (Aware.DEBUG) Log.d(TAG, "Location tracking with Network is not available");
                 }
             }
+            if (Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_LOCATION_PASSIVE).equals("true")) {
+                if (locationManager.getProvider(LocationManager.PASSIVE_PROVIDER) != null) {
+                    // We treat this provider differently.  Since there is no battery use
+                    // and we don't have actual control over frequency, we register for
+                    // frequency=60s and no movement threshold.
+                    int static_frequency_passive = 60 * 1000;
+                    if (FREQUENCY_PASSIVE != static_frequency_passive) {
+                        locationManager.requestLocationUpdates(
+                                LocationManager.PASSIVE_PROVIDER,
+                                static_frequency_passive, 0, this);
+                        FREQUENCY_PASSIVE = static_frequency_passive;
+                    }
+                    if (Aware.DEBUG)
+                        Log.d(TAG, "Location tracking with passive provider is active: " + FREQUENCY_PASSIVE + "s");
+                } else {
+                    ContentValues rowData = new ContentValues();
+                    rowData.put(Locations_Data.TIMESTAMP, System.currentTimeMillis());
+                    rowData.put(Locations_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
+                    rowData.put(Locations_Data.PROVIDER, LocationManager.PASSIVE_PROVIDER);
+                    rowData.put(Locations_Data.LABEL, "disabled");
+                    try {
+                        getContentResolver().insert(Locations_Data.CONTENT_URI, rowData);
+                    } catch (SQLiteException e) {
+                        if (Aware.DEBUG) Log.d(TAG, e.getMessage());
+                    } catch (SQLException e) {
+                        if (Aware.DEBUG) Log.d(TAG, e.getMessage());
+                    }
+                    if (Aware.DEBUG)
+                        Log.d(TAG, "Location tracking with passive provider is not available");
+                }
+            }
+
+            if (!Aware.isSyncEnabled(this, Locations_Provider.getAuthority(this)) && Aware.isStudy(this)) {
+                ContentResolver.setIsSyncable(Aware.getAWAREAccount(this), Locations_Provider.getAuthority(this), 1);
+                ContentResolver.setSyncAutomatically(Aware.getAWAREAccount(this), Locations_Provider.getAuthority(this), true);
+                ContentResolver.addPeriodicSync(
+                        Aware.getAWAREAccount(this),
+                        Locations_Provider.getAuthority(this),
+                        Bundle.EMPTY,
+                        Long.parseLong(Aware.getSetting(this, Aware_Preferences.FREQUENCY_WEBSERVICE)) * 60
+                );
+            }
         }
 
         return START_STICKY;
@@ -367,6 +425,17 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
     @Override
     public void onLocationChanged(Location newLocation) {
+        if (Aware.DEBUG)
+            Log.d(TAG, "onLocationChanged: provider=" + newLocation.getProvider() + " location=" + newLocation);
+        // We save ALL locations, no matter which provider it comes from, for the most complete
+        // history and future analysis.
+        if (Aware.getSetting(getApplicationContext(), Aware_Preferences.LOCATION_SAVE_ALL).equals("true")) {
+            saveLocation(newLocation);
+            Intent locationEvent = new Intent(ACTION_AWARE_LOCATIONS);
+            sendBroadcast(locationEvent);
+            return;
+        }
+
         Location bestLocation;
 
         //If we have both GPS and Network active, check if we got a better location. Otherwise always keep the latest.
@@ -390,33 +459,7 @@ public class Locations extends Aware_Sensor implements LocationListener {
             bestLocation = newLocation;
         }
 
-        // Are we within the geofence, if we are given one?
-        Boolean permitted = testGeoFence(bestLocation.getLatitude(), bestLocation.getLongitude());
-        if (Aware.DEBUG) Log.d(TAG, "Locations: geofencing: permitted=" + permitted);
-
-
-        ContentValues rowData = new ContentValues();
-        rowData.put(Locations_Data.TIMESTAMP, System.currentTimeMillis());
-        rowData.put(Locations_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
-        rowData.put(Locations_Data.PROVIDER, bestLocation.getProvider());
-        if (permitted) {
-            rowData.put(Locations_Data.LATITUDE, bestLocation.getLatitude());
-            rowData.put(Locations_Data.LONGITUDE, bestLocation.getLongitude());
-            rowData.put(Locations_Data.BEARING, bestLocation.getBearing());
-            rowData.put(Locations_Data.SPEED, bestLocation.getSpeed());
-            rowData.put(Locations_Data.ALTITUDE, bestLocation.getAltitude());
-            rowData.put(Locations_Data.ACCURACY, bestLocation.getAccuracy());
-        } else {
-            rowData.put(Locations_Data.LABEL, "outofbounds");
-        }
-
-        try {
-            getContentResolver().insert(Locations_Data.CONTENT_URI, rowData);
-        } catch (SQLiteException e) {
-            if (Aware.DEBUG) Log.d(TAG, e.getMessage());
-        } catch (SQLException e) {
-            if (Aware.DEBUG) Log.d(TAG, e.getMessage());
-        }
+        saveLocation(bestLocation);
 
         Intent locationEvent = new Intent(ACTION_AWARE_LOCATIONS);
         sendBroadcast(locationEvent);
@@ -424,6 +467,8 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
     @Override
     public void onProviderDisabled(String provider) {
+        if (Aware.DEBUG)
+            Log.d(TAG, "onProviderDisabled: " + provider);
         if (provider.equals(LocationManager.GPS_PROVIDER)) {
             if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_GPS_LOCATION_DISABLED);
             Intent gps = new Intent(ACTION_AWARE_GPS_LOCATION_DISABLED);
@@ -452,6 +497,8 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
     @Override
     public void onProviderEnabled(String provider) {
+        if (Aware.DEBUG)
+            Log.d(TAG, "onProviderDisabled: " + provider);
         if (provider.equals(LocationManager.GPS_PROVIDER)) {
             if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_GPS_LOCATION_ENABLED);
             Intent gps = new Intent(ACTION_AWARE_GPS_LOCATION_ENABLED);
@@ -481,7 +528,28 @@ public class Locations extends Aware_Sensor implements LocationListener {
     @Override
     public void onStatusChanged(String provider, int status, Bundle extras) {
         if (Aware.DEBUG)
-            Log.d(TAG, "onStatusChanged: " + provider + " Status:" + status + " Extras:" + extras.toString());
+            Log.d(TAG, "onStatusChanged: " + provider + " Status:" + status + " Extras:" + ((extras != null) ? extras.toString() : ""));
+
+        // Save ALL locations, no matter which provider it comes from or how it relates to past
+        // locations.
+        if (Aware.getSetting(getApplicationContext(), Aware_Preferences.LOCATION_SAVE_ALL).equals("true")) {
+            boolean updated = false;
+            Location newLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (newLocation != null) {
+                saveLocation(newLocation);
+                updated = true;
+            }
+            newLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if (newLocation != null) {
+                saveLocation(newLocation);
+                updated = true;
+            }
+            if (updated) {
+                Intent locationEvent = new Intent(ACTION_AWARE_LOCATIONS);
+                sendBroadcast(locationEvent);
+            }
+            return;
+        }
 
         //Save best location, could be GPS or network
         //This covers the case when the GPS stopped and we did not get a location fix.
@@ -501,10 +569,24 @@ public class Locations extends Aware_Sensor implements LocationListener {
             bestLocation = lastGPS;
         }
 
+        saveLocation(bestLocation);
+
+        Intent locationEvent = new Intent(ACTION_AWARE_LOCATIONS);
+        sendBroadcast(locationEvent);
+    }
+
+    /**
+     * Save a location, handling geofencing.
+     *
+     * @param bestLocation Location to save
+     */
+    public void saveLocation(Location bestLocation) {
+
+        if (bestLocation == null) return; //no location available
+
         // Are we within the geofence, if we are given one?
-        // Below we don't handle bestLocaiton=null case
         Boolean permitted = testGeoFence(bestLocation.getLatitude(), bestLocation.getLongitude());
-        if (Aware.DEBUG) Log.d(TAG, "Locations: geofencing: permitted=" + permitted);
+        if (Aware.DEBUG) Log.d(TAG, "geofencing: permitted=" + permitted);
 
         ContentValues rowData = new ContentValues();
         rowData.put(Locations_Data.TIMESTAMP, System.currentTimeMillis());
@@ -523,13 +605,14 @@ public class Locations extends Aware_Sensor implements LocationListener {
 
         try {
             getContentResolver().insert(Locations_Data.CONTENT_URI, rowData);
+
+            if (awareSensor != null) awareSensor.onLocationChanged(rowData);
+
         } catch (SQLiteException e) {
             if (Aware.DEBUG) Log.d(TAG, e.getMessage());
         } catch (SQLException e) {
             if (Aware.DEBUG) Log.d(TAG, e.getMessage());
         }
 
-        Intent locationEvent = new Intent(ACTION_AWARE_LOCATIONS);
-        sendBroadcast(locationEvent);
     }
 }

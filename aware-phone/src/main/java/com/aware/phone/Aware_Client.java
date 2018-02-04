@@ -2,24 +2,24 @@
 package com.aware.phone;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.Dialog;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.PowerManager;
 import android.preference.CheckBoxPreference;
 import android.preference.EditTextPreference;
 import android.preference.ListPreference;
@@ -27,7 +27,6 @@ import android.preference.Preference;
 import android.preference.PreferenceGroup;
 import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
-import android.provider.Settings;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.PermissionChecker;
 import android.support.v7.widget.Toolbar;
@@ -66,9 +65,22 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
     private static final ArrayList<String> REQUIRED_PERMISSIONS = new ArrayList<>();
     private static final Hashtable<String, Integer> optionalSensors = new Hashtable<>();
 
+    private Aware.AndroidPackageMonitor packageMonitor;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        //Android 8 specific: create a notification channel for AWARE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager not_manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            NotificationChannel aware_channel = new NotificationChannel(Aware.AWARE_NOTIFICATION_ID, getResources().getString(com.aware.R.string.app_name), NotificationManager.IMPORTANCE_DEFAULT);
+            aware_channel.setDescription(getResources().getString(com.aware.R.string.aware_description));
+            aware_channel.enableLights(true);
+            aware_channel.setLightColor(Color.BLUE);
+            aware_channel.enableVibration(true);
+            not_manager.createNotificationChannel(aware_channel);
+        }
 
         prefs = getSharedPreferences("com.aware.phone", Context.MODE_PRIVATE);
 
@@ -116,6 +128,14 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
             Intent aware = new Intent(this, Aware.class);
             startService(aware);
         }
+
+//        IntentFilter awarePackages = new IntentFilter();
+//        awarePackages.addAction(Intent.ACTION_PACKAGE_ADDED);
+//        awarePackages.addAction(Intent.ACTION_PACKAGE_REMOVED);
+//
+//        packageMonitor = new Aware.AndroidPackageMonitor();
+//
+//        registerReceiver(packageMonitor, awarePackages);
     }
 
     @Override
@@ -167,7 +187,6 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         }
         if (EditTextPreference.class.isInstance(pref)) {
             EditTextPreference text = (EditTextPreference) findPreference(key);
-            text.setSummary(Aware.getSetting(getApplicationContext(), key));
             text.setText(Aware.getSetting(getApplicationContext(), key));
         }
         if (ListPreference.class.isInstance(pref)) {
@@ -203,12 +222,18 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                         if (Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER).length() == 0) {
                             Toast.makeText(getApplicationContext(), "Study URL missing...", Toast.LENGTH_SHORT).show();
                         } else if (!Aware.isStudy(getApplicationContext())) {
-                            Aware.joinStudy(getApplicationContext(), Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
-                            Intent study_scan = new Intent();
-                            study_scan.putExtra(Aware_Join_Study.EXTRA_STUDY_URL, Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
-                            setResult(Activity.RESULT_OK, study_scan);
-                            finish();
+                            //Shows UI to allow the user to join study
+                            Intent joinStudy = new Intent(getApplicationContext(), Aware_Join_Study.class);
+                            joinStudy.putExtra(Aware_Join_Study.EXTRA_STUDY_URL, Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER));
+                            startActivity(joinStudy);
                         }
+                    }
+                    if (pref.getKey().equalsIgnoreCase(Aware_Preferences.FOREGROUND_PRIORITY)) {
+                        sendBroadcast(new Intent(Aware.ACTION_AWARE_PRIORITY_FOREGROUND));
+                    }
+                } else {
+                    if (pref.getKey().equalsIgnoreCase(Aware_Preferences.FOREGROUND_PRIORITY)) {
+                        sendBroadcast(new Intent(Aware.ACTION_AWARE_PRIORITY_BACKGROUND));
                     }
                 }
             }
@@ -246,7 +271,7 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                         Field field = res.getField("ic_action_" + parent.getKey());
                         int icon_id = field.getInt(null);
                         Drawable category_icon = ContextCompat.getDrawable(getApplicationContext(), icon_id);
-                        if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
+                        if (category_icon != null) {
                             category_icon.setColorFilter(new PorterDuffColorFilter(ContextCompat.getColor(getApplicationContext(), R.color.accent), PorterDuff.Mode.SRC_IN));
                             parent.setIcon(category_icon);
                             onContentChanged();
@@ -259,7 +284,7 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                         Field field = res.getField("ic_action_" + parent.getKey());
                         int icon_id = field.getInt(null);
                         Drawable category_icon = ContextCompat.getDrawable(getApplicationContext(), icon_id);
-                        if (category_icon != null && Build.VERSION.SDK_INT > Build.VERSION_CODES.GINGERBREAD_MR1) {
+                        if (category_icon != null) {
                             category_icon.clearColorFilter();
                             parent.setIcon(category_icon);
                             onContentChanged();
@@ -335,119 +360,74 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
                 e.printStackTrace();
             }
 
-            //Check if AWARE is active on the accessibility services
+            //Check if AWARE is active on the accessibility services. Android Wear doesn't support accessibility services (no API yet...)
             if (!Aware.is_watch(this)) {
                 Applications.isAccessibilityServiceActive(this);
             }
 
+            //Check if AWARE is allowed to run on Doze
+            Aware.isBatteryOptimizationIgnored(this, getPackageName());
+
             prefs.registerOnSharedPreferenceChangeListener(this);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-                new SettingsSync().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, //use all cores available to process UI faster
-                        findPreference(Aware_Preferences.DEVICE_ID),
-                        findPreference(Aware_Preferences.DEVICE_LABEL),
-                        findPreference(Aware_Preferences.AWARE_VERSION),
-                        findPreference(Aware_Preferences.STATUS_ACCELEROMETER),
-                        findPreference(Aware_Preferences.STATUS_APPLICATIONS),
-                        findPreference(Aware_Preferences.STATUS_BAROMETER),
-                        findPreference(Aware_Preferences.STATUS_BATTERY),
-                        findPreference(Aware_Preferences.STATUS_BLUETOOTH),
-                        findPreference(Aware_Preferences.STATUS_COMMUNICATION_EVENTS),
-                        findPreference(Aware_Preferences.STATUS_CALLS),
-                        findPreference(Aware_Preferences.STATUS_MESSAGES),
-                        findPreference(Aware_Preferences.STATUS_ESM),
-                        findPreference(Aware_Preferences.STATUS_GRAVITY),
-                        findPreference(Aware_Preferences.STATUS_GYROSCOPE),
-                        findPreference(Aware_Preferences.STATUS_LOCATION_NETWORK),
-                        findPreference(Aware_Preferences.STATUS_LOCATION_GPS),
-                        findPreference(Aware_Preferences.STATUS_LIGHT),
-                        findPreference(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER),
-                        findPreference(Aware_Preferences.STATUS_NETWORK_EVENTS),
-                        findPreference(Aware_Preferences.STATUS_NETWORK_TRAFFIC),
-                        findPreference(Aware_Preferences.STATUS_MAGNETOMETER),
-                        findPreference(Aware_Preferences.STATUS_PROCESSOR),
-                        findPreference(Aware_Preferences.STATUS_TIMEZONE),
-                        findPreference(Aware_Preferences.STATUS_PROXIMITY),
-                        findPreference(Aware_Preferences.STATUS_ROTATION),
-                        findPreference(Aware_Preferences.STATUS_SCREEN),
-                        findPreference(Aware_Preferences.STATUS_SIGNIFICANT_MOTION),
-                        findPreference(Aware_Preferences.STATUS_TEMPERATURE),
-                        findPreference(Aware_Preferences.STATUS_TELEPHONY),
-                        findPreference(Aware_Preferences.STATUS_WIFI),
-                        findPreference(Aware_Preferences.STATUS_MQTT),
-                        findPreference(Aware_Preferences.MQTT_SERVER),
-                        findPreference(Aware_Preferences.MQTT_PORT),
-                        findPreference(Aware_Preferences.MQTT_USERNAME),
-                        findPreference(Aware_Preferences.MQTT_PASSWORD),
-                        findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
-                        findPreference(Aware_Preferences.MQTT_QOS),
-                        findPreference(Aware_Preferences.STATUS_WEBSERVICE),
-                        findPreference(Aware_Preferences.WEBSERVICE_SERVER),
-                        findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
-                        findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
-                        findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
-                        findPreference(Aware_Preferences.WEBSERVICE_SILENT),
-                        findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
-                        findPreference(Aware_Preferences.REMIND_TO_CHARGE),
-                        findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
-                        findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
-                        findPreference(Aware_Preferences.DEBUG_DB_SLOW)
-                );
-            } else {
-                new SettingsSync().execute(
-                        findPreference(Aware_Preferences.DEVICE_ID),
-                        findPreference(Aware_Preferences.DEVICE_LABEL),
-                        findPreference(Aware_Preferences.AWARE_VERSION),
-                        findPreference(Aware_Preferences.STATUS_ACCELEROMETER),
-                        findPreference(Aware_Preferences.STATUS_APPLICATIONS),
-                        findPreference(Aware_Preferences.STATUS_BAROMETER),
-                        findPreference(Aware_Preferences.STATUS_BATTERY),
-                        findPreference(Aware_Preferences.STATUS_BLUETOOTH),
-                        findPreference(Aware_Preferences.STATUS_COMMUNICATION_EVENTS),
-                        findPreference(Aware_Preferences.STATUS_CALLS),
-                        findPreference(Aware_Preferences.STATUS_MESSAGES),
-                        findPreference(Aware_Preferences.STATUS_ESM),
-                        findPreference(Aware_Preferences.STATUS_GRAVITY),
-                        findPreference(Aware_Preferences.STATUS_GYROSCOPE),
-                        findPreference(Aware_Preferences.STATUS_LOCATION_NETWORK),
-                        findPreference(Aware_Preferences.STATUS_LOCATION_GPS),
-                        findPreference(Aware_Preferences.STATUS_LIGHT),
-                        findPreference(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER),
-                        findPreference(Aware_Preferences.STATUS_NETWORK_EVENTS),
-                        findPreference(Aware_Preferences.STATUS_NETWORK_TRAFFIC),
-                        findPreference(Aware_Preferences.STATUS_MAGNETOMETER),
-                        findPreference(Aware_Preferences.STATUS_PROCESSOR),
-                        findPreference(Aware_Preferences.STATUS_TIMEZONE),
-                        findPreference(Aware_Preferences.STATUS_PROXIMITY),
-                        findPreference(Aware_Preferences.STATUS_ROTATION),
-                        findPreference(Aware_Preferences.STATUS_SCREEN),
-                        findPreference(Aware_Preferences.STATUS_SIGNIFICANT_MOTION),
-                        findPreference(Aware_Preferences.STATUS_TEMPERATURE),
-                        findPreference(Aware_Preferences.STATUS_TELEPHONY),
-                        findPreference(Aware_Preferences.STATUS_WIFI),
-                        findPreference(Aware_Preferences.STATUS_MQTT),
-                        findPreference(Aware_Preferences.MQTT_SERVER),
-                        findPreference(Aware_Preferences.MQTT_PORT),
-                        findPreference(Aware_Preferences.MQTT_USERNAME),
-                        findPreference(Aware_Preferences.MQTT_PASSWORD),
-                        findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
-                        findPreference(Aware_Preferences.MQTT_QOS),
-                        findPreference(Aware_Preferences.STATUS_WEBSERVICE),
-                        findPreference(Aware_Preferences.WEBSERVICE_SERVER),
-                        findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
-                        findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
-                        findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
-                        findPreference(Aware_Preferences.WEBSERVICE_SILENT),
-                        findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
-                        findPreference(Aware_Preferences.REMIND_TO_CHARGE),
-                        findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
-                        findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
-                        findPreference(Aware_Preferences.DEBUG_DB_SLOW)
-                );
-            }
-
-            //Ask the user to add AWARE to the battery optimization ignored settings
-            Aware.isBatteryOptimizationIgnored(getApplicationContext(), getPackageName());
+            
+            new SettingsSync().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, //use all cores available to process UI faster
+                    findPreference(Aware_Preferences.DEVICE_ID),
+                    findPreference(Aware_Preferences.DEVICE_LABEL),
+                    findPreference(Aware_Preferences.AWARE_VERSION),
+                    findPreference(Aware_Preferences.STATUS_ACCELEROMETER),
+                    findPreference(Aware_Preferences.STATUS_APPLICATIONS),
+                    findPreference(Aware_Preferences.STATUS_BAROMETER),
+                    findPreference(Aware_Preferences.STATUS_BATTERY),
+                    findPreference(Aware_Preferences.STATUS_BLUETOOTH),
+                    findPreference(Aware_Preferences.STATUS_CALLS),
+                    findPreference(Aware_Preferences.STATUS_COMMUNICATION_EVENTS),
+                    findPreference(Aware_Preferences.STATUS_CRASHES),
+                    findPreference(Aware_Preferences.STATUS_ESM),
+                    findPreference(Aware_Preferences.STATUS_GRAVITY),
+                    findPreference(Aware_Preferences.STATUS_GYROSCOPE),
+                    findPreference(Aware_Preferences.STATUS_INSTALLATIONS),
+                    findPreference(Aware_Preferences.STATUS_KEYBOARD),
+                    findPreference(Aware_Preferences.STATUS_LIGHT),
+                    findPreference(Aware_Preferences.STATUS_LINEAR_ACCELEROMETER),
+                    findPreference(Aware_Preferences.STATUS_LOCATION_GPS),
+                    findPreference(Aware_Preferences.STATUS_LOCATION_NETWORK),
+                    findPreference(Aware_Preferences.STATUS_LOCATION_PASSIVE),
+                    findPreference(Aware_Preferences.STATUS_MAGNETOMETER),
+                    findPreference(Aware_Preferences.STATUS_MESSAGES),
+                    findPreference(Aware_Preferences.STATUS_MQTT),
+                    findPreference(Aware_Preferences.STATUS_NETWORK_EVENTS),
+                    findPreference(Aware_Preferences.STATUS_NETWORK_TRAFFIC),
+                    findPreference(Aware_Preferences.STATUS_NOTIFICATIONS),
+                    findPreference(Aware_Preferences.STATUS_PROCESSOR),
+                    findPreference(Aware_Preferences.STATUS_PROXIMITY),
+                    findPreference(Aware_Preferences.STATUS_ROTATION),
+                    findPreference(Aware_Preferences.STATUS_SCREEN),
+                    findPreference(Aware_Preferences.STATUS_SIGNIFICANT_MOTION),
+                    findPreference(Aware_Preferences.STATUS_TEMPERATURE),
+                    findPreference(Aware_Preferences.STATUS_TELEPHONY),
+                    findPreference(Aware_Preferences.STATUS_TIMEZONE),
+                    findPreference(Aware_Preferences.STATUS_WIFI),
+                    findPreference(Aware_Preferences.STATUS_WEBSERVICE),
+                    findPreference(Aware_Preferences.MQTT_SERVER),
+                    findPreference(Aware_Preferences.MQTT_PORT),
+                    findPreference(Aware_Preferences.MQTT_USERNAME),
+                    findPreference(Aware_Preferences.MQTT_PASSWORD),
+                    findPreference(Aware_Preferences.MQTT_KEEP_ALIVE),
+                    findPreference(Aware_Preferences.MQTT_QOS),
+                    findPreference(Aware_Preferences.WEBSERVICE_SERVER),
+                    findPreference(Aware_Preferences.FREQUENCY_WEBSERVICE),
+                    findPreference(Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA),
+                    findPreference(Aware_Preferences.WEBSERVICE_CHARGING),
+                    findPreference(Aware_Preferences.WEBSERVICE_SILENT),
+                    findPreference(Aware_Preferences.WEBSERVICE_WIFI_ONLY),
+                    findPreference(Aware_Preferences.WEBSERVICE_FALLBACK_NETWORK),
+                    findPreference(Aware_Preferences.REMIND_TO_CHARGE),
+                    findPreference(Aware_Preferences.WEBSERVICE_SIMPLE),
+                    findPreference(Aware_Preferences.WEBSERVICE_REMOVE_DATA),
+                    findPreference(Aware_Preferences.DEBUG_DB_SLOW),
+                    findPreference(Aware_Preferences.FOREGROUND_PRIORITY),
+                    findPreference(Aware_Preferences.STATUS_TOUCH)
+            );
         }
     }
 
@@ -458,13 +438,18 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(this);
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        //unregisterReceiver(packageMonitor);
+    }
+
     private class AsyncPing extends AsyncTask<Void, Void, Boolean> {
         @Override
         protected Boolean doInBackground(Void... params) {
             // Download the certificate, and block since we are already running in background
             // and we need the certificate immediately.
-            Uri server_url = Uri.parse("https://api.awareframework.com/index.php");
-            SSLManager.downloadCertificate(getApplicationContext(), server_url.getHost(), true);
+            SSLManager.handleUrl(getApplicationContext(), "https://api.awareframework.com/index.php", true);
 
             //Ping AWARE's server with getApplicationContext() device's information for framework's statistics log
             Hashtable<String, String> device_ping = new Hashtable<>();

@@ -1,8 +1,6 @@
 package com.aware.utils;
 
-import android.app.IntentService;
 import android.content.Context;
-import android.content.Intent;
 import android.net.Uri;
 import android.os.Environment;
 import android.support.v4.content.ContextCompat;
@@ -25,7 +23,16 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.URL;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.Date;
 import java.util.concurrent.ExecutionException;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLPeerUnverifiedException;
 
 /**
  * Created by denzil on 15/12/15.
@@ -37,6 +44,7 @@ public class SSLManager {
      * Handle a study URL.  Fetch data from query parameters if it is there.  Otherwise,
      * use the classic method of downloading the certificate over http.  Enforces the key
      * management policy.
+     *
      * @param context app context
      * @param url     full URL, including protocol and query arguments
      * @param block   if true, this method blocks, otherwise downloading is in background.
@@ -68,11 +76,117 @@ public class SSLManager {
                         Log.d(Aware.TAG, "Certificates: Already present and key_management=once: " + hostname);
                 }
             } else {
-                if (!hasCertificate(context, hostname)) {
-                    if (Aware.DEBUG) Log.d(Aware.TAG, "Certificates: Downloading certificate: " + hostname);
-                    downloadCertificate(context, hostname, block);
+                try {
+                    if (!hasCertificate(context, hostname)) {
+                        if (Aware.DEBUG) Log.d(Aware.TAG, "Certificates: Downloading for the first time SSL certificate: " + hostname);
+                        downloadCertificate(context, hostname, block);
+                    } else {
+                        InputStream localCertificate = getCertificate(context, hostname);
+                        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                        X509Certificate cert = (X509Certificate) cf.generateCertificate(localCertificate);
+
+                        if (System.currentTimeMillis() > cert.getNotAfter().getTime()) { //local certificate is expired, download new certificate
+                            downloadCertificate(context, hostname, true);
+                            //this will force download of SSL certificate from the server. Checked every 15 minutes until successful update to up-to-date certificate.
+                        }
+                    }
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (CertificateException e) {
+                    e.printStackTrace();
                 }
             }
+        }
+    }
+
+    /**
+     * Based on https://www.experts-exchange.com/questions/27668989/Getting-SSL-Certificate-expiry-date.html
+     * Improved to wait 5 seconds for the connection
+     * @param url
+     * @return
+     */
+    public static Date getRemoteCertificateExpiration(URL url) {
+        try {
+            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+            conn.setConnectTimeout(5000); //5 seconds to connect
+            conn.setReadTimeout(10000); //10 seconds to acknowledge the response
+
+            long now = System.currentTimeMillis();
+            while (conn.getResponseCode() != HttpsURLConnection.HTTP_OK || now - System.currentTimeMillis() <= 5000) {
+                //noop - wait up to 5 seconds to retrieve the certificate
+            }
+
+            // retrieve the N-length signing chain for the server certificates
+            // certs[0] is the server's certificate
+            // certs[1] - certs[N-1] are the intermediate authorities that signed the cert
+            // certs[N] is the root certificate authority of the chain
+            Certificate[] certs = conn.getServerCertificates();
+            if (certs.length > 0 && certs[0] instanceof X509Certificate) {
+                // certs[0] is an X.509 certificate, return its "notAfter" date
+                return ((X509Certificate) certs[0]).getNotAfter();
+            }
+
+            // connection is not HTTPS or server is not signed with an X.509 certificate, return null
+            return null;
+        } catch (SSLPeerUnverifiedException spue) {
+            // connection to server is not verified, unable to get certificates
+            Log.d(Aware.TAG, "Certificates: " + spue.getMessage());
+            return null;
+        } catch (IllegalStateException ise) {
+            // shouldn't get here -- indicates attempt to get certificates before
+            // connection is established
+            Log.d(Aware.TAG, "Certificates: " + ise.getMessage());
+            return null;
+        } catch (IOException ioe) {
+            // error connecting to URL -- this must be caught last since
+            // other exceptions are subclasses of IOException
+            Log.d(Aware.TAG, "Certificates: " + ioe.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Downloads the certificate directly from the URL, instead of a public folder.
+     * @param url
+     * @return
+     */
+    public static X509Certificate retrieveRemoteCertificate(URL url) {
+        try {
+            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+            conn.setConnectTimeout(5000); //5 seconds to connect
+            conn.setReadTimeout(10000); //10 seconds to acknowledge the response
+
+            long now = System.currentTimeMillis();
+            while (conn.getResponseCode() != HttpsURLConnection.HTTP_OK || now - System.currentTimeMillis() <= 5000) {
+                //noop - wait up to 5 seconds to retrieve the certificate
+            }
+
+            // retrieve the N-length signing chain for the server certificates
+            // certs[0] is the server's certificate
+            // certs[1] - certs[N-1] are the intermediate authorities that signed the cert
+            // certs[N] is the root certificate authority of the chain
+            Certificate[] certs = conn.getServerCertificates();
+            if (certs.length > 0 && certs[0] instanceof X509Certificate) {
+                // certs[0] is an X.509 certificate, return its "notAfter" date
+                return ((X509Certificate) certs[0]);
+            }
+
+            // connection is not HTTPS or server is not signed with an X.509 certificate, return null
+            return null;
+        } catch (SSLPeerUnverifiedException spue) {
+            // connection to server is not verified, unable to get certificates
+            Log.d(Aware.TAG, "Certificates: " + spue.getMessage());
+            return null;
+        } catch (IllegalStateException ise) {
+            // shouldn't get here -- indicates attempt to get certificates before
+            // connection is established
+            Log.d(Aware.TAG, "Certificates: " + ise.getMessage());
+            return null;
+        } catch (IOException ioe) {
+            // error connecting to URL -- this must be caught last since
+            // other exceptions are subclasses of IOException
+            Log.d(Aware.TAG, "Certificates: " + ioe.getMessage());
+            return null;
         }
     }
 
@@ -97,31 +211,46 @@ public class SSLManager {
         } else cert_host = hostname;
 
         File root_folder;
-        if (!context.getApplicationContext().getResources().getBoolean(R.bool.standalone)) {
+        if (context.getApplicationContext().getResources().getBoolean(R.bool.internalstorage)) {
+            root_folder = new File(context.getFilesDir(), "/credentials/" + hostname);
+        } else if (!context.getApplicationContext().getResources().getBoolean(R.bool.standalone)) {
             root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE"), "/credentials/" + hostname); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
         } else {
             root_folder = new File(ContextCompat.getExternalFilesDirs(context, null)[0], "/AWARE/credentials/" + hostname); // sdcard/Android/<app_package_name>/AWARE/ (not shareable, deletes when uninstalling package)
         }
         root_folder.mkdirs();
 
-        Future https = Ion.with(context.getApplicationContext())
-                .load("http://" + cert_host + "/public/server.crt")
-                .noCache()
-                .write(new File(root_folder.toString() + "/server.crt"))
-                .setCallback(new FutureCallback<File>() {
-                    @Override
-                    public void onCompleted(Exception e, File result) {
-                        if (e != null) {
-                            Log.d(Aware.TAG, "ERROR SSL certificate: " + e.getMessage());
-                        }
-                    }
-                });
+        try {
+            X509Certificate certificate = retrieveRemoteCertificate(new URL(hostname));
+            Log.d(Aware.TAG, "Certificate info: " + certificate.toString());
 
-        if (block) {
-            try {
-                https.get();
-            } catch (java.lang.InterruptedException | ExecutionException e) {
-                // What to do here?
+            byte[] certificate_data = certificate.getEncoded();
+
+            FileOutputStream outputStream = new FileOutputStream(new File(root_folder.toString() + "/server.crt"));
+            outputStream.write(certificate_data);
+            outputStream.close();
+
+        } catch (CertificateEncodingException | IOException | NullPointerException e) {
+            Ion.getDefault(context.getApplicationContext()).getConscryptMiddleware().enable(false);
+            Future https = Ion.with(context.getApplicationContext())
+                    .load("http://" + cert_host + "/public/server.crt")
+                    .noCache()
+                    .write(new File(root_folder.toString() + "/server.crt"))
+                    .setCallback(new FutureCallback<File>() {
+                        @Override
+                        public void onCompleted(Exception e, File result) {
+                            if (e != null) {
+                                Log.d(Aware.TAG, "ERROR SSL certificate: " + e.getMessage());
+                            }
+                        }
+                    });
+
+            if (block) {
+                try {
+                    https.get();
+                } catch (java.lang.InterruptedException | ExecutionException j) {
+                    // What to do here?
+                }
             }
         }
     }
@@ -207,7 +336,9 @@ public class SSLManager {
         if (hostname == null || hostname.length() == 0) return false;
 
         File root_folder;
-        if (!context.getResources().getBoolean(R.bool.standalone)) {
+        if (context.getResources().getBoolean(R.bool.internalstorage)) {
+            root_folder = new File(context.getFilesDir() + "/credentials");
+        } else if (!context.getResources().getBoolean(R.bool.standalone)) {
             root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE") + "/credentials"); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
         } else {
             root_folder = new File(ContextCompat.getExternalFilesDirs(context, null)[0] + "/AWARE/credentials"); // sdcard/Android/<app_package_name>/AWARE/ (not shareable, deletes when uninstalling package)
@@ -215,8 +346,15 @@ public class SSLManager {
         if (!root_folder.exists()) {
             root_folder.mkdirs();
         }
-        File host_credentials = new File(root_folder.toString(), hostname);
-        return host_credentials.exists();
+
+        File host_credentials = new File(root_folder.toString(), hostname + "/server.crt");
+        try {
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            X509Certificate certificate = (X509Certificate) cf.generateCertificate(new FileInputStream(host_credentials.getPath()));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
 
@@ -232,7 +370,9 @@ public class SSLManager {
         if (hostname == null || hostname.length() == 0) return;
 
         File root_folder;
-        if (!context.getResources().getBoolean(R.bool.standalone)) {
+        if (context.getResources().getBoolean(R.bool.internalstorage)) {
+            root_folder = new File(context.getFilesDir() + "/credentials");
+        } else if (!context.getResources().getBoolean(R.bool.standalone)) {
             root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE") + "/credentials"); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
         } else {
             root_folder = new File(ContextCompat.getExternalFilesDirs(context, null)[0] + "/AWARE/credentials"); // sdcard/Android/<app_package_name>/AWARE/ (not shareable, deletes when uninstalling package)
@@ -263,7 +403,7 @@ public class SSLManager {
      * Load HTTPS certificate from server: server.crt
      *
      * @param context context
-     * @param server server URL, http://{hostname}/index.php
+     * @param server  server URL, http://{hostname}/index.php
      * @return FileInputStream of certificate
      * @throws FileNotFoundException
      */
@@ -274,8 +414,10 @@ public class SSLManager {
         if (hostname == null || hostname.length() == 0) return null;
 
         File root_folder;
-        if (!context.getResources().getBoolean(R.bool.standalone)) {
-            root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE")+ "/credentials"); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
+        if (context.getResources().getBoolean(R.bool.internalstorage)) {
+            root_folder = new File(context.getFilesDir() + "/credentials");
+        } else if (!context.getResources().getBoolean(R.bool.standalone)) {
+            root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE") + "/credentials"); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
         } else {
             root_folder = new File(ContextCompat.getExternalFilesDirs(context, null)[0] + "/AWARE/credentials"); // sdcard/Android/<app_package_name>/AWARE/ (not shareable, deletes when uninstalling package)
         }
@@ -298,7 +440,7 @@ public class SSLManager {
      * NOTE: different from getHTTPS. Here, we have the MQTT server address/IP as input parameter.
      *
      * @param context context
-     * @param server server hostname
+     * @param server  server hostname
      * @return Input stream of opened certificate.
      * @throws FileNotFoundException
      */
@@ -307,8 +449,10 @@ public class SSLManager {
         if (server == null || server.length() == 0) return null;
 
         File root_folder;
-        if (!context.getResources().getBoolean(R.bool.standalone)) {
-            root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE")+ "/credentials"); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
+        if (context.getResources().getBoolean(R.bool.internalstorage)) {
+            root_folder = new File(context.getFilesDir() + "/credentials");
+        } else if (!context.getResources().getBoolean(R.bool.standalone)) {
+            root_folder = new File(Environment.getExternalStoragePublicDirectory("AWARE") + "/credentials"); // sdcard/AWARE/ (shareable, does not delete when uninstalling)
         } else {
             root_folder = new File(ContextCompat.getExternalFilesDirs(context, null)[0] + "/AWARE/credentials"); // sdcard/Android/<app_package_name>/AWARE/ (not shareable, deletes when uninstalling package)
         }

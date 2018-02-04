@@ -2,21 +2,18 @@
 package com.aware;
 
 import android.Manifest;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteException;
 import android.net.Uri;
-import android.os.Binder;
-import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.provider.CallLog.Calls;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.PermissionChecker;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -24,7 +21,6 @@ import android.util.Log;
 import com.aware.providers.Communication_Provider;
 import com.aware.providers.Communication_Provider.Calls_Data;
 import com.aware.providers.Communication_Provider.Messages_Data;
-import com.aware.ui.PermissionsHandler;
 import com.aware.utils.Aware_Sensor;
 import com.aware.utils.Encrypter;
 
@@ -126,6 +122,9 @@ public class Communication extends Aware_Sensor {
 
                                 try {
                                     getContentResolver().insert(Calls_Data.CONTENT_URI, received);
+
+                                    if (awareSensor != null) awareSensor.onCall(received);
+
                                 } catch (SQLiteException e) {
                                     if (Aware.DEBUG) Log.d(TAG, e.getMessage());
                                 } catch (SQLException e) {
@@ -150,6 +149,9 @@ public class Communication extends Aware_Sensor {
                                 missed.put(Calls_Data.TRACE, Encrypter.hashPhone(getApplicationContext(), lastCall.getString(lastCall.getColumnIndex(Calls.NUMBER))));
                                 try {
                                     getContentResolver().insert(Calls_Data.CONTENT_URI, missed);
+
+                                    if (awareSensor != null) awareSensor.onCall(missed);
+
                                 } catch (SQLiteException e) {
                                     if (Aware.DEBUG) Log.d(TAG, e.getMessage());
                                 } catch (SQLException e) {
@@ -173,6 +175,9 @@ public class Communication extends Aware_Sensor {
                                 outgoing.put(Calls_Data.TRACE, Encrypter.hashPhone(getApplicationContext(), lastCall.getString(lastCall.getColumnIndex(Calls.NUMBER))));
                                 try {
                                     getContentResolver().insert(Calls_Data.CONTENT_URI, outgoing);
+
+                                    if (awareSensor != null) awareSensor.onCall(outgoing);
+
                                 } catch (SQLiteException e) {
                                     if (Aware.DEBUG) Log.d(TAG, e.getMessage());
                                 } catch (SQLException e) {
@@ -220,6 +225,9 @@ public class Communication extends Aware_Sensor {
 
                                 try {
                                     getContentResolver().insert(Messages_Data.CONTENT_URI, inbox);
+
+                                    if (awareSensor != null) awareSensor.onMessage(inbox);
+
                                 } catch (SQLiteException e) {
                                     if (Aware.DEBUG) Log.d(TAG, e.getMessage());
                                 } catch (SQLException e) {
@@ -243,6 +251,9 @@ public class Communication extends Aware_Sensor {
 
                                 try {
                                     getContentResolver().insert(Messages_Data.CONTENT_URI, sent);
+
+                                    if (awareSensor != null) awareSensor.onMessage(sent);
+
                                 } catch (SQLiteException e) {
                                     if (Aware.DEBUG) Log.d(TAG, e.getMessage());
                                 } catch (SQLException e) {
@@ -265,32 +276,83 @@ public class Communication extends Aware_Sensor {
     }
 
     private PhoneState phoneState = new PhoneState();
-
     private class PhoneState extends PhoneStateListener {
         @Override
         public void onCallStateChanged(int state, String incomingNumber) {
             super.onCallStateChanged(state, incomingNumber);
 
-            if (Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_COMMUNICATION_EVENTS).equals("true")) {
-                switch (state) {
-                    case TelephonyManager.CALL_STATE_RINGING:
-                        if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_CALL_RINGING);
-                        Intent callRinging = new Intent(ACTION_AWARE_CALL_RINGING);
-                        sendBroadcast(callRinging);
-                        break;
-                    case TelephonyManager.CALL_STATE_OFFHOOK:
-                        if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_USER_IN_CALL);
-                        Intent inCall = new Intent(ACTION_AWARE_USER_IN_CALL);
-                        sendBroadcast(inCall);
-                        break;
-                    case TelephonyManager.CALL_STATE_IDLE:
-                        if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_USER_NOT_IN_CALL);
-                        Intent userFree = new Intent(ACTION_AWARE_USER_NOT_IN_CALL);
-                        sendBroadcast(userFree);
-                        break;
-                }
+            switch (state) {
+                case TelephonyManager.CALL_STATE_RINGING:
+                    if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_CALL_RINGING);
+                    Intent callRinging = new Intent(ACTION_AWARE_CALL_RINGING);
+                    sendBroadcast(callRinging);
+
+                    if (awareSensor != null) awareSensor.onRinging(incomingNumber);
+
+                    break;
+                case TelephonyManager.CALL_STATE_OFFHOOK:
+                    if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_USER_IN_CALL);
+                    Intent inCall = new Intent(ACTION_AWARE_USER_IN_CALL);
+                    sendBroadcast(inCall);
+
+                    if (awareSensor != null) awareSensor.onBusy(incomingNumber);
+
+                    break;
+                case TelephonyManager.CALL_STATE_IDLE:
+                    if (Aware.DEBUG) Log.d(TAG, ACTION_AWARE_USER_NOT_IN_CALL);
+                    Intent userFree = new Intent(ACTION_AWARE_USER_NOT_IN_CALL);
+                    sendBroadcast(userFree);
+
+                    if (awareSensor != null) awareSensor.onFree(incomingNumber);
+
+                    break;
             }
         }
+    }
+
+    private static Communication.AWARESensorObserver awareSensor;
+    public static void setSensorObserver(Communication.AWARESensorObserver observer) {
+        awareSensor = observer;
+    }
+    public static Communication.AWARESensorObserver getSensorObserver() {
+        return awareSensor;
+    }
+
+    public interface AWARESensorObserver {
+        /**
+         * Callback when a call event is recorded (received, made, missed)
+         *
+         * @param data
+         */
+        void onCall(ContentValues data);
+
+        /**
+         * Callback when a text message event is recorded (received, sent)
+         *
+         * @param data
+         */
+        void onMessage(ContentValues data);
+
+        /**
+         * Callback when the phone is ringing
+         *
+         * @param number
+         */
+        void onRinging(String number);
+
+        /**
+         * Callback when the user answered and is busy with a call
+         *
+         * @param number
+         */
+        void onBusy(String number);
+
+        /**
+         * Callback when the user hangup an ongoing call and is now free
+         *
+         * @param number
+         */
+        void onFree(String number);
     }
 
     @Override
@@ -302,14 +364,12 @@ public class Communication extends Aware_Sensor {
     public void onCreate() {
         super.onCreate();
 
+        AUTHORITY = Communication_Provider.getAuthority(this);
+
         telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
 
         callsObs = new CallsObserver(new Handler());
         msgsObs = new MessagesObserver(new Handler());
-
-        DATABASE_TABLES = Communication_Provider.DATABASE_TABLES;
-        TABLES_FIELDS = Communication_Provider.TABLES_FIELDS;
-        CONTEXT_URIS = new Uri[]{Calls_Data.CONTENT_URI, Messages_Data.CONTENT_URI};
 
         REQUIRED_PERMISSIONS.add(Manifest.permission.READ_CONTACTS);
         REQUIRED_PERMISSIONS.add(Manifest.permission.READ_PHONE_STATE);
@@ -327,6 +387,7 @@ public class Communication extends Aware_Sensor {
             DEBUG = Aware.getSetting(this, Aware_Preferences.DEBUG_FLAG).equals("true");
             if (Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_CALLS).equals("true")) {
                 getContentResolver().registerContentObserver(Calls.CONTENT_URI, true, callsObs);
+                telephonyManager.listen(phoneState, PhoneStateListener.LISTEN_CALL_STATE);
             } else {
                 getContentResolver().unregisterContentObserver(callsObs);
             }
@@ -337,13 +398,18 @@ public class Communication extends Aware_Sensor {
                 getContentResolver().unregisterContentObserver(msgsObs);
             }
 
-            if (Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_COMMUNICATION_EVENTS).equals("true")) {
-                telephonyManager.listen(phoneState, PhoneStateListener.LISTEN_CALL_STATE);
-            } else {
-                telephonyManager.listen(phoneState, PhoneStateListener.LISTEN_NONE);
-            }
-
             if (Aware.DEBUG) Log.d(TAG, TAG + " service active...");
+
+            if (!Aware.isSyncEnabled(this, Communication_Provider.getAuthority(this)) && Aware.isStudy(this)) {
+                ContentResolver.setIsSyncable(Aware.getAWAREAccount(this), Communication_Provider.getAuthority(this), 1);
+                ContentResolver.setSyncAutomatically(Aware.getAWAREAccount(this), Communication_Provider.getAuthority(this), true);
+                ContentResolver.addPeriodicSync(
+                        Aware.getAWAREAccount(this),
+                        Communication_Provider.getAuthority(this),
+                        Bundle.EMPTY,
+                        Long.parseLong(Aware.getSetting(this, Aware_Preferences.FREQUENCY_WEBSERVICE)) * 60
+                );
+            }
         }
 
         return START_STICKY;
@@ -356,6 +422,15 @@ public class Communication extends Aware_Sensor {
         getContentResolver().unregisterContentObserver(callsObs);
         getContentResolver().unregisterContentObserver(msgsObs);
         telephonyManager.listen(phoneState, PhoneStateListener.LISTEN_NONE);
+
+        if (Aware.isStudy(this) && Aware.isSyncEnabled(this, Communication_Provider.getAuthority(this))) {
+            ContentResolver.setSyncAutomatically(Aware.getAWAREAccount(this), Communication_Provider.getAuthority(this), false);
+            ContentResolver.removePeriodicSync(
+                    Aware.getAWAREAccount(this),
+                    Communication_Provider.getAuthority(this),
+                    Bundle.EMPTY
+            );
+        }
 
         if (Aware.DEBUG) Log.d(TAG, TAG + " service terminated...");
     }

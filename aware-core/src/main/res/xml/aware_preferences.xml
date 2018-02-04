@@ -12,13 +12,11 @@
             android:summary="%s"
             android:title="AWARE Device ID" />
         <EditTextPreference
-            android:defaultValue=""
             android:key="device_label"
             android:persistent="true"
             android:summary="%s"
             android:title="Device label" />
         <EditTextPreference
-            android:defaultValue=""
             android:key="aware_version"
             android:persistent="true"
             android:selectable="false"
@@ -50,7 +48,6 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_accelerometer"
                 android:entries="@array/frequency_readable"
                 android:entryValues="@array/frequency_values"
                 android:key="frequency_accelerometer"
@@ -66,6 +63,14 @@
                 android:persistent="true"
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_accelerometer"
+                android:key="frequency_accelerometer_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_applications"
@@ -81,13 +86,13 @@
                 android:title="Application usage" />
 
             <EditTextPreference
-                android:defaultValue="1"
+                android:defaultValue="0"
                 android:dependency="status_applications"
                 android:inputType="number"
                 android:key="frequency_applications"
                 android:persistent="true"
-                android:summary="X minute(s)"
-                android:title="Background applications" />
+                android:summary="Update every X minute(s). 0 to disable."
+                android:title="Background processes" />
 
             <CheckBoxPreference
                 android:defaultValue="false"
@@ -134,9 +139,8 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_barometer"
-                android:entries="@array/frequency_readable"
-                android:entryValues="@array/frequency_values"
+                android:entries="@array/low_frequency_readable"
+                android:entryValues="@array/low_frequency_values"
                 android:key="frequency_barometer"
                 android:persistent="true"
                 android:summary="%s"
@@ -150,6 +154,14 @@
                 android:persistent="true"
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_barometer"
+                android:key="frequency_barometer_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_battery"
@@ -178,7 +190,6 @@
 
             <EditTextPreference
                 android:defaultValue="60"
-                android:dependency="status_bluetooth"
                 android:inputType="number"
                 android:key="frequency_bluetooth"
                 android:persistent="true"
@@ -191,12 +202,6 @@
             android:summary="Communication usage (calls/messages)"
             android:title="Communication">
 
-            <CheckBoxPreference
-                android:defaultValue="false"
-                android:key="status_communication_events"
-                android:persistent="true"
-                android:summary="User in call, not in call"
-                android:title="User availability" />
             <CheckBoxPreference
                 android:defaultValue="false"
                 android:key="status_calls"
@@ -238,7 +243,6 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_gravity"
                 android:entries="@array/frequency_readable"
                 android:entryValues="@array/frequency_values"
                 android:key="frequency_gravity"
@@ -255,6 +259,14 @@
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
 
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_gravity"
+                android:key="frequency_gravity_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
+
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_gyroscope"
@@ -270,7 +282,6 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_gyroscope"
                 android:entries="@array/frequency_readable"
                 android:entryValues="@array/frequency_values"
                 android:key="frequency_gyroscope"
@@ -286,6 +297,14 @@
                 android:persistent="true"
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_gyroscope"
+                android:key="frequency_gyroscope_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
 
         </PreferenceScreen>
         <PreferenceScreen
@@ -307,7 +326,7 @@
                 android:inputType="number"
                 android:key="frequency_location_gps"
                 android:persistent="true"
-                android:summary="X seconds. (0 = always on)"
+                android:summary="Seconds (0 = always on)"
                 android:title="Minimum GPS update frequency" />
 
             <EditTextPreference
@@ -316,7 +335,7 @@
                 android:inputType="number"
                 android:key="min_location_gps_accuracy"
                 android:persistent="true"
-                android:summary="X meters. (0 = always on)"
+                android:summary="Meters (0 = always on)"
                 android:title="Movement threshold for GPS updates" />
 
             <CheckBoxPreference
@@ -332,7 +351,7 @@
                 android:inputType="number"
                 android:key="frequency_location_network"
                 android:persistent="true"
-                android:summary="X seconds. (0 = always on)"
+                android:summary="Seconds (0 = always on)"
                 android:title="Minimum triangulation update frequency" />
 
             <EditTextPreference
@@ -341,17 +360,30 @@
                 android:inputType="number"
                 android:key="min_location_network_accuracy"
                 android:persistent="true"
-                android:summary="X meters. (0 = always on)"
+                android:summary="Meters (0 = always on)"
                 android:title="Movement threshold for triangulation updates" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:key="status_location_passive"
+                android:persistent="true"
+                android:summary="Don't fetch locations, but use locations if other apps request them."
+                android:title="Passive location provider" />
 
             <EditTextPreference
                 android:defaultValue="300"
-                android:dependency="status_location_gps"
                 android:inputType="number"
                 android:key="location_expiration_time"
                 android:persistent="true"
                 android:summary="Expire after X seconds"
                 android:title="Location fix lifetime" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:key="location_save_all"
+                android:persistent="true"
+                android:summary="Don't use heuristics to only record best locations"
+                android:title="Save all locations" />
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_light"
@@ -367,9 +399,8 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_light"
-                android:entries="@array/frequency_readable"
-                android:entryValues="@array/frequency_values"
+                android:entries="@array/low_frequency_readable"
+                android:entryValues="@array/low_frequency_values"
                 android:key="frequency_light"
                 android:persistent="true"
                 android:summary="%s"
@@ -384,9 +415,17 @@
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
 
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_light"
+                android:key="frequency_light_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
+
         </PreferenceScreen>
         <PreferenceScreen
-            android:icon="@drawable/ic_action_linear_acceleration"
+            android:icon="@drawable/ic_action_linear_accelerometer"
             android:key="linear_accelerometer"
             android:summary="Acceleration, w/o gravity (m/s^2)"
             android:title="Linear accelerometer">
@@ -399,7 +438,6 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_linear_accelerometer"
                 android:entries="@array/frequency_readable"
                 android:entryValues="@array/frequency_values"
                 android:key="frequency_linear_accelerometer"
@@ -415,6 +453,14 @@
                 android:persistent="true"
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_linear_accelerometer"
+                android:key="frequency_linear_accelerometer_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
 
         </PreferenceScreen>
         <PreferenceScreen
@@ -437,14 +483,6 @@
                 android:summary="Wi-Fi &amp; mobile network traffic (bytes,packets)"
                 android:title="Network traffic" />
 
-            <EditTextPreference
-                android:defaultValue="60"
-                android:inputType="number"
-                android:key="frequency_network_traffic"
-                android:persistent="true"
-                android:summary="Every X seconds"
-                android:title="Traffic update frequency" />
-
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_magnetometer"
@@ -460,7 +498,6 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_magnetometer"
                 android:entries="@array/frequency_readable"
                 android:entryValues="@array/frequency_values"
                 android:key="frequency_magnetometer"
@@ -477,6 +514,14 @@
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
 
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_magnetometer"
+                android:key="frequency_magnetometer_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
+
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_processor"
@@ -492,7 +537,6 @@
 
             <EditTextPreference
                 android:defaultValue="10"
-                android:dependency="status_processor"
                 android:inputType="number"
                 android:key="frequency_processor"
                 android:persistent="true"
@@ -511,14 +555,6 @@
                 android:persistent="true"
                 android:title="Active" />
 
-            <EditTextPreference
-                android:defaultValue="3600"
-                android:dependency="status_timezone"
-                android:inputType="number"
-                android:key="frequency_timezone"
-                android:persistent="true"
-                android:summary="Every X seconds"
-                android:title="Update frequency" />
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_proximity"
@@ -534,9 +570,8 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_proximity"
-                android:entries="@array/frequency_readable"
-                android:entryValues="@array/frequency_values"
+                android:entries="@array/low_frequency_readable"
+                android:entryValues="@array/low_frequency_values"
                 android:key="frequency_proximity"
                 android:persistent="true"
                 android:summary="%s"
@@ -550,6 +585,14 @@
                 android:persistent="true"
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_proximity"
+                android:key="frequency_proximity_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
 
         </PreferenceScreen>
         <PreferenceScreen
@@ -566,7 +609,6 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_rotation"
                 android:entries="@array/frequency_readable"
                 android:entryValues="@array/frequency_values"
                 android:key="frequency_rotation"
@@ -583,6 +625,14 @@
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
 
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_rotation"
+                android:key="frequency_rotation_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
+
         </PreferenceScreen>
         <PreferenceScreen
             android:icon="@drawable/ic_action_screen"
@@ -595,7 +645,14 @@
                 android:key="status_screen"
                 android:persistent="true"
                 android:summary="Capture screen events (on, off, locked, unlocked)"
-                android:title="Active" />
+                android:title="Screen usage" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:key="status_touch"
+                android:persistent="true"
+                android:summary="Capture clicks, long clicks and scroll up/down events"
+                android:title="Screen interaction" />
 
         </PreferenceScreen>
         <PreferenceScreen
@@ -626,9 +683,8 @@
 
             <ListPreference
                 android:defaultValue="200000"
-                android:dependency="status_temperature"
-                android:entries="@array/frequency_readable"
-                android:entryValues="@array/frequency_values"
+                android:entries="@array/low_frequency_readable"
+                android:entryValues="@array/low_frequency_values"
                 android:key="frequency_temperature"
                 android:persistent="true"
                 android:summary="%s"
@@ -642,6 +698,14 @@
                 android:persistent="true"
                 android:summary="e.g., log only if [x,y,z] >= 0.01"
                 android:title="Sensitivity (0 = disabled)" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:dependency="status_temperature"
+                android:key="frequency_temperature_enforce"
+                android:persistent="true"
+                android:summary="If Android gives points more often than frequency, ignore them."
+                android:title="Enforce the frequency" />
 
         </PreferenceScreen>
         <PreferenceScreen
@@ -671,7 +735,6 @@
 
             <EditTextPreference
                 android:defaultValue="60"
-                android:dependency="status_wifi"
                 android:inputType="number"
                 android:key="frequency_wifi"
                 android:persistent="true"
@@ -765,6 +828,14 @@
                 android:summary="Sync only over Wi-Fi"
                 android:title="Wi-Fi only" />
 
+            <EditTextPreference
+                android:defaultValue="0"
+                android:dependency="webservice_wifi_only"
+                android:key="fallback_network"
+                android:persistent="true"
+                android:summary="%s"
+                android:title="Fallback to 3G after x hours" />
+
             <CheckBoxPreference
                 android:defaultValue="true"
                 android:key="webservice_charging"
@@ -803,6 +874,13 @@
                 android:summary="Remind to charge when 15%"
                 android:title="Battery reminder" />
 
+            <CheckBoxPreference
+                android:defaultValue="true"
+                android:key="foreground_priority"
+                android:persistent="true"
+                android:summary="RECOMMENDED to keep AWARE running non-stop."
+                android:title="Foreground priority" />
+
         </PreferenceScreen>
     </PreferenceCategory>
 
@@ -819,8 +897,8 @@
                 android:defaultValue="true"
                 android:key="debug_flag"
                 android:persistent="true"
-                android:title="Debugging"
-                android:summary="Show messages in logcat" />
+                android:summary="Show messages in logcat"
+                android:title="Debugging" />
 
             <EditTextPreference
                 android:defaultValue="AWARE"
@@ -850,6 +928,13 @@
                 android:persistent="true"
                 android:summary="WARNING: This may cause problems with some sensors or plugins if they rely on history data (e.g., battery charges, discharges, ...)"
                 android:title="Wipe data on upload" />
+
+            <CheckBoxPreference
+                android:defaultValue="false"
+                android:key="frequency_enforce_all"
+                android:persistent="true"
+                android:summary="If Android gives points more often than the requested frequency, ignore them."
+                android:title="Enforce frequency of all sensors" />
 
         </PreferenceScreen>
 
