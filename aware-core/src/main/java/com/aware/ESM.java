@@ -25,13 +25,13 @@ import com.aware.providers.ESM_Provider.ESM_Data;
 import com.aware.ui.ESM_Queue;
 import com.aware.ui.esms.ESMFactory;
 import com.aware.ui.esms.ESM_Question;
-import com.aware.ui.esms.ESM_SSE_Radio;
 import com.aware.utils.Aware_Sensor;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.Random;
 
 /**
@@ -213,7 +213,7 @@ public class ESM extends Aware_Sensor {
     /**
      * ESM that asks the user to respond to an SSE question item
      */
-    public static final int TYPE_ESM_SSE_RADIO = 17;
+    public static final int TYPE_ESM_RANDOM_RADIO = 17;
 
     /**
      * Required String extra for displaying an ESM. It should contain the JSON string that defines the ESM dialog.
@@ -383,10 +383,22 @@ public class ESM extends Aware_Sensor {
                 }
 
                 /* in case of SSE questions we want to set the instructions randomly*/
+                JSONArray questionArray = new JSONArray();
                 if(esm.getInt(ESM_Question.esm_type) == 17){
-                    int rnd = new Random().nextInt(ESM_SSE_Radio.instructions.length);
-                    String instruction_r = ESM_SSE_Radio.instructions[rnd];
-                    esm.put(ESM_Question.esm_instructions, instruction_r);
+                    ArrayList<String> list = new ArrayList<String>();
+                    questionArray = esm.getJSONArray(ESM_Question.esm_collection);
+                    if (questionArray != null) {
+                        int len = questionArray.length();
+                        for (int x=0;x<len;x++){
+                            list.add(questionArray.get(x).toString());
+                        }
+                        String[] instruction_list = new String[list.size()];
+                        list.toArray(instruction_list);
+                        int rnd = new Random(System.currentTimeMillis()).nextInt(len);
+                        String instruction_r = instruction_list[rnd];
+                        esm.put(ESM_Question.esm_instructions, instruction_r);
+                        esm.remove(ESM_Question.esm_collection); //don't want db to become bulky with array
+                    }
                 }
 
                 ContentValues rowData = new ContentValues();
@@ -407,6 +419,10 @@ public class ESM extends Aware_Sensor {
                     if (Aware.DEBUG) Log.d(TAG, "ESM: " + rowData.toString());
                 } catch (SQLiteException e) {
                     if (Aware.DEBUG) Log.d(TAG, e.getMessage());
+                }
+
+                if(esm.getInt(ESM_Question.esm_type) == 17){
+                    esm.put(ESM_Question.esm_collection, questionArray); //re-add array back for next instance
                 }
             }
 

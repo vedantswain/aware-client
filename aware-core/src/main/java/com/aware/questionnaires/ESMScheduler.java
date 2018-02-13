@@ -6,7 +6,7 @@ import android.util.Log;
 import com.aware.Aware;
 import com.aware.ESM;
 import com.aware.ui.esms.ESMFactory;
-import com.aware.ui.esms.ESM_SSE_Radio;
+import com.aware.ui.esms.ESM_Random_Radio;
 import com.aware.utils.Scheduler;
 
 import org.json.JSONException;
@@ -21,6 +21,12 @@ public class ESMScheduler {
     private static String CQ_ID = "1909";
 
     private static String TAG = "ESM SCHEDULER";
+
+    private static final String[] instructions = {
+            "How true is this statement of you right now:\n" + "I feel self-conscious",
+            "How true is this statement of you right now:\n" + "I feel as smart as others",
+            "How true is this statement of you right now:\n" + "I feel unattractive",
+    };
 
     public static void setESMs(Context context) {
         scheduleMHQ(context);
@@ -49,8 +55,9 @@ public class ESMScheduler {
             ESMFactory factory = new ESMFactory();
 
             //define ESM question
-            ESM_SSE_Radio esm_rr = new ESM_SSE_Radio();
-            esm_rr.addRadio("not at all").addRadio("a little bit")
+            ESM_Random_Radio esm_rr = new ESM_Random_Radio();
+            esm_rr.setCollection(instructions)
+                    .addRadio("not at all").addRadio("a little bit")
                     .addRadio("somewhat").addRadio("very much").addRadio("extremely")
                     .setSubmitButton("Done");
 

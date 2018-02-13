@@ -36,6 +36,7 @@ public class ESM_Question extends DialogFragment {
 
     public static final String esm_type = "esm_type";
     public static final String esm_title = "esm_title";
+    public static final String esm_collection = "esm_collection";
     public static final String esm_instructions = "esm_instructions";
     public static final String esm_submit = "esm_submit";
     public static final String esm_expiration_threshold = "esm_expiration_threshold";

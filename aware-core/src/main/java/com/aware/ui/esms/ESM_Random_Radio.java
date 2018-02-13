@@ -27,34 +27,23 @@ import com.aware.providers.ESM_Provider;
 import org.json.JSONArray;
 import org.json.JSONException;
 
-import java.util.Random;
-
 /**
  * Created by vedantdasswain on 13/02/18.
  */
 
-public class ESM_SSE_Radio extends ESM_Radio {
+public class ESM_Random_Radio extends ESM_Radio {
 
     public static final String esm_radios = "esm_radios";
     public static final String ESM_SSE_TAG = "ESM SSE";
 
-    public static final String[] instructions = {
-        "How true is this statement of you right now:\n" + "I feel self-conscious",
-        "How true is this statement of you right now:\n" + "I feel as smart as others",
-        "How true is this statement of you right now:\n" + "I feel unattractive",
-    };
-
-    public ESM_SSE_Radio() throws JSONException {
-        this.setType(ESM.TYPE_ESM_SSE_RADIO);
+    public ESM_Random_Radio() throws JSONException {
+        this.setType(ESM.TYPE_ESM_RANDOM_RADIO);
     }
 
-    @NonNull
-    @Override
-    public String getInstructions() throws JSONException {
-        int rnd = new Random().nextInt(instructions.length);
-        String instruction_r = instructions[rnd];
-        this.esm.put(esm_instructions, instruction_r);
-        return this.esm.getString(esm_instructions);
+    // Adds a collection of possible questions to an esm
+    public ESM_Random_Radio setCollection(String[] collection) throws JSONException {
+        this.esm.put(esm_collection, new JSONArray(collection));
+        return this;
     }
 
     @NonNull
@@ -65,7 +54,7 @@ public class ESM_SSE_Radio extends ESM_Radio {
         AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
 
         LayoutInflater inflater = (LayoutInflater) getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        final View ui = inflater.inflate(R.layout.esm_radio, null);
+        final View ui = inflater.inflate(R.layout.esm_random_radio, null);
         builder.setView(ui);
 
         esm_dialog = builder.create();
