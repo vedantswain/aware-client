@@ -25,11 +25,14 @@ import com.aware.providers.ESM_Provider.ESM_Data;
 import com.aware.ui.ESM_Queue;
 import com.aware.ui.esms.ESMFactory;
 import com.aware.ui.esms.ESM_Question;
+import com.aware.ui.esms.ESM_SSE_Radio;
 import com.aware.utils.Aware_Sensor;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.Random;
 
 /**
  * AWARE ESM module
@@ -207,6 +210,10 @@ public class ESM extends Aware_Sensor {
      * ESM that asks the user to make a video recording
      */
     public static final int TYPE_ESM_VIDEO = 16;
+    /**
+     * ESM that asks the user to respond to an SSE question item
+     */
+    public static final int TYPE_ESM_SSE_RADIO = 17;
 
     /**
      * Required String extra for displaying an ESM. It should contain the JSON string that defines the ESM dialog.
@@ -373,6 +380,13 @@ public class ESM extends Aware_Sensor {
                         }
                         if (esm_cursor != null && !esm_cursor.isClosed()) esm_cursor.close();
                     }
+                }
+
+                /* in case of SSE questions we want to set the instructions randomly*/
+                if(esm.getInt(ESM_Question.esm_type) == 17){
+                    int rnd = new Random().nextInt(ESM_SSE_Radio.instructions.length);
+                    String instruction_r = ESM_SSE_Radio.instructions[rnd];
+                    esm.put(ESM_Question.esm_instructions, instruction_r);
                 }
 
                 ContentValues rowData = new ContentValues();
