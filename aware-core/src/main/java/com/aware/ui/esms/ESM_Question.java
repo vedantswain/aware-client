@@ -39,6 +39,7 @@ public class ESM_Question extends DialogFragment {
     public static final String esm_collection = "esm_collection";
     public static final String esm_instructions = "esm_instructions";
     public static final String esm_submit = "esm_submit";
+    public static final String esm_cancel = "esm_cancel";
     public static final String esm_expiration_threshold = "esm_expiration_threshold";
     public static final String esm_notification_timeout = "esm_notification_timeout";
     public static final String esm_notification_retry = "esm_notification_retry";
@@ -121,6 +122,18 @@ public class ESM_Question extends DialogFragment {
 
     public ESM_Question setSubmitButton(String submit) throws JSONException {
         this.esm.put(esm_submit, submit);
+        return this;
+    }
+
+    public String getCancelButton() throws JSONException {
+        if (!this.esm.has(esm_cancel)) {
+            this.esm.put(esm_cancel, "Cancel");
+        }
+        return this.esm.getString(esm_cancel);
+    }
+
+    public ESM_Question setCancelButton(String cancel) throws JSONException {
+        this.esm.put(esm_cancel, cancel);
         return this;
     }
 

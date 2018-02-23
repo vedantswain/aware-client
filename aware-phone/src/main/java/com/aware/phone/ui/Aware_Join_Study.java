@@ -36,6 +36,7 @@ import com.aware.Aware_Preferences;
 import com.aware.phone.Aware_Client;
 import com.aware.phone.R;
 import com.aware.providers.Aware_Provider;
+import com.aware.questionnaires.ESMScheduler;
 import com.aware.utils.Http;
 import com.aware.utils.Https;
 import com.aware.utils.PluginsManager;
@@ -525,6 +526,7 @@ public class Aware_Join_Study extends Aware_Activity {
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
             mLoading.dismiss();
+            ESMScheduler.setESMs(getApplicationContext());
         }
     }
 

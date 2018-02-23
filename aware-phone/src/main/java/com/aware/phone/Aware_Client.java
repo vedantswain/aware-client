@@ -40,7 +40,6 @@ import com.aware.Aware;
 import com.aware.Aware_Preferences;
 import com.aware.phone.ui.Aware_Activity;
 import com.aware.phone.ui.Aware_Join_Study;
-import com.aware.questionnaires.ESMScheduler;
 import com.aware.ui.PermissionsHandler;
 import com.aware.utils.Https;
 import com.aware.utils.SSLManager;
@@ -183,13 +182,6 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
 
             //update the parent to show active/inactive
             new SettingsSync().execute(pref);
-
-            if (key.equals("status_esm") && Aware.getSetting(getApplicationContext(), key).equals("true")){
-                ESMScheduler.setESMs(getApplicationContext());
-            }
-            else if(key.equals("status_esm") && Aware.getSetting(getApplicationContext(), key).equals("false")){
-                ESMScheduler.removeESMs(getApplicationContext());
-            }
 
             //Start/Stop sensor
             Aware.startAWARE(getApplicationContext());

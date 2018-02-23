@@ -124,6 +124,7 @@ public class ESM_Random_Radio extends ESM_Radio {
                 }
             }
             Button cancel_radio = (Button) ui.findViewById(R.id.esm_cancel);
+            cancel_radio.setText(getCancelButton());
             cancel_radio.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
