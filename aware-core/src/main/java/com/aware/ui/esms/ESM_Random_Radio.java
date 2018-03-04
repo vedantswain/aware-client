@@ -123,6 +123,14 @@ public class ESM_Random_Radio extends ESM_Radio {
                     });
                 }
             }
+
+            // time at which the dialog is created is appended as a string to the trigger string
+            String dialogOpenTimestamp = String.valueOf(System.currentTimeMillis());
+            ContentValues rowData = new ContentValues();
+            rowData.put(ESM_Provider.ESM_Data.TRIGGER, getTrigger() + " | "+dialogOpenTimestamp);
+            getContext().getContentResolver().update(ESM_Provider.ESM_Data.CONTENT_URI, rowData, ESM_Provider.ESM_Data._ID + "=" + getID(), null);
+
+
             Button cancel_radio = (Button) ui.findViewById(R.id.esm_cancel);
             cancel_radio.setText(getCancelButton());
             cancel_radio.setOnClickListener(new View.OnClickListener() {

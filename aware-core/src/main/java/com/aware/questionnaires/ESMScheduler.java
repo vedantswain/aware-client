@@ -72,8 +72,8 @@ public class ESMScheduler {
             factory.addESM(esm_rr);
 
             Scheduler.Schedule random = new Scheduler.Schedule(MHQ_ID);
-            random.addHour(9).addHour(23)
-                    .random(8,60)
+            random.addHour(9).addHour(22)
+                    .random(14,40)
                     .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
                     .setActionIntentAction(ESM.ACTION_AWARE_QUEUE_ESM)
                     .addActionExtra(ESM.EXTRA_ESM, factory.build());
@@ -106,8 +106,8 @@ public class ESMScheduler {
             factory.addESM(esm_rr);
 
             Scheduler.Schedule random = new Scheduler.Schedule(CQ_ID);
-            random.addHour(9).addHour(23)
-                    .random(8,60)
+            random.addHour(9).addHour(22)
+                    .random(14,40)
                     .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
                     .setActionIntentAction(ESM.ACTION_AWARE_QUEUE_ESM)
                     .addActionExtra(ESM.EXTRA_ESM, factory.build());

@@ -469,6 +469,7 @@ public class ESM extends Aware_Sensor {
         mBuilder.setContentText(context.getResources().getText(R.string.aware_esm_questions));
         mBuilder.setNumber(ESM_Queue.getQueueSize(context)); //update the number of ESMs queued
         mBuilder.setOngoing(true); //So it does not get cleared if the user presses clear all notifications.
+        mBuilder.setPriority(NotificationCompat.PRIORITY_HIGH);
         mBuilder.setUsesChronometer(true);
         mBuilder.setOnlyAlertOnce(notifyOnce);
         mBuilder.setDefaults(NotificationCompat.DEFAULT_ALL);
