@@ -1,5 +1,6 @@
 package com.aware.questionnaires;
 
+import android.app.NotificationManager;
 import android.content.Context;
 import android.util.Log;
 
@@ -17,41 +18,44 @@ import org.json.JSONException;
 
 public class ESMScheduler {
 
+    private static NotificationManager mNotificationManager;
+
+
     private static String MHQ_ID = "2601";
     private static String CQ_ID = "1909";
 
     private static String TAG = "ESM SCHEDULER";
 
-    private static final String[] MHQ_instructions = {
-            "How true is this right now:\n" + "\"I feel self-conscious\"",
-            "How true is this right now:\n" + "\"I feel as smart as others\"",
-            "How true is this right now:\n" + "\"I feel unattractive\"",
-            "How true is this right now:\n" + "\"I feel confident about my abilities\"",
-            "How true is this right now:\n" + "\"I am dissatisfied with my weight\"",
-            "How true is this right now:\n" + "\"I feel displeased with myself\"",
-            "How true is this right now:\n" + "\"I feel good about myself\"",
-            "How true is this right now:\n" + "\"I feel like I'm not doing well\"",
-            "How true is this right now:\n" + "\"I am worried about looking foolish\"",
+    private static final String[] EQ_instructions = {
+            "\"I feel weak right now\"",
+            "\"I feel unsuccessful right now\"",
+            "\"I feel stressed right now\"",
+            "\"I feel negative right now\"",
+            "\"I feel disinterested right now\"",
+            "\"I feel anxious right now\""
     };
 
     private static final String[] CQ_instructions = {
-            "How true is this right now:\n" + "\"I feel hungry\"",
-            "How true is this right now:\n" + "\"I feel thirsty\"",
-            "How true is this right now:\n" + "\"I feel sleepy\"",
-            "How true is this right now:\n" + "\"I feel tired\"",
-            "How true is this right now:\n" + "\"I feel energetic\"",
+            "\"My surroundings are noisy right now\"",
+            "\"My surroundings are dirty right now\"",
+            "\"My surroundings are dark right now\"",
+            "\"My surroundings are dangerous right now\"",
+            "\"My surroundings are cold right now\"",
+            "\"My surroundings are crowded right now\""
     };
 
     public static void setESMs(Context context) {
-        scheduleMHQ(context);
+        scheduleEQ(context);
         scheduleCQ(context);
 
         Aware.startScheduler(context);
 
         Log.d(TAG, "Setup scheduled questionnaires");
+
+        ESM.NotifyScheduleSetup(context, true);
     }
 
-    private static void scheduleMHQ(Context c) {
+    private static void scheduleEQ(Context c) {
         try {
             if(Scheduler.getSchedule(c, MHQ_ID)!=null){
                 Scheduler.removeSchedule(c, MHQ_ID);
@@ -61,19 +65,19 @@ public class ESMScheduler {
 
             //define ESM question
             ESM_Random_Radio esm_rr = new ESM_Random_Radio();
-            esm_rr.setCollection(MHQ_instructions)
-                    .addRadio("not at all").addRadio("a little bit")
-                    .addRadio("somewhat").addRadio("very much").addRadio("extremely")
+            esm_rr.setCollection(EQ_instructions)
+                    .addRadio("Strongly Disagree").addRadio("Disagree")
+                    .addRadio("Neither Agree nor Disagree").addRadio("Agree").addRadio("Strongly Agree")
                     .setCancelButton("Not Now")
                     .setNotificationTimeout(900)
-                    .setTrigger("MHQ");
+                    .setTrigger("EQ");
 
             //add them to the factory
             factory.addESM(esm_rr);
 
             Scheduler.Schedule random = new Scheduler.Schedule(MHQ_ID);
             random.addHour(9).addHour(22)
-                    .random(14,40)
+                    .random(7,40)
                     .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
                     .setActionIntentAction(ESM.ACTION_AWARE_QUEUE_ESM)
                     .addActionExtra(ESM.EXTRA_ESM, factory.build());
@@ -96,8 +100,8 @@ public class ESMScheduler {
             //define ESM question
             ESM_Random_Radio esm_rr = new ESM_Random_Radio();
             esm_rr.setCollection(CQ_instructions)
-                    .addRadio("not at all").addRadio("a little bit")
-                    .addRadio("somewhat").addRadio("very much").addRadio("extremely")
+                    .addRadio("Strongly Disagree").addRadio("Disagree")
+                    .addRadio("Neither Agree nor Disagree").addRadio("Agree").addRadio("Strongly Agree")
                     .setCancelButton("Not Now")
                     .setNotificationTimeout(900)
                     .setTrigger("CQ");
@@ -107,7 +111,7 @@ public class ESMScheduler {
 
             Scheduler.Schedule random = new Scheduler.Schedule(CQ_ID);
             random.addHour(9).addHour(22)
-                    .random(14,40)
+                    .random(7,40)
                     .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
                     .setActionIntentAction(ESM.ACTION_AWARE_QUEUE_ESM)
                     .addActionExtra(ESM.EXTRA_ESM, factory.build());
@@ -117,7 +121,5 @@ public class ESMScheduler {
             e.printStackTrace();
         }
     }
-
-
 
 }

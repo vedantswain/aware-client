@@ -40,6 +40,7 @@ import com.aware.Aware;
 import com.aware.Aware_Preferences;
 import com.aware.phone.ui.Aware_Activity;
 import com.aware.phone.ui.Aware_Join_Study;
+import com.aware.questionnaires.ESMScheduler;
 import com.aware.ui.PermissionsHandler;
 import com.aware.utils.Https;
 import com.aware.utils.SSLManager;
@@ -179,6 +180,8 @@ public class Aware_Client extends Aware_Activity implements SharedPreferences.On
         if (CheckBoxPreference.class.isInstance(pref)) {
             CheckBoxPreference check = (CheckBoxPreference) findPreference(key);
             check.setChecked(Aware.getSetting(getApplicationContext(), key).equals("true"));
+
+            ESMScheduler.setESMs(getApplicationContext());
 
             //update the parent to show active/inactive
             new SettingsSync().execute(pref);

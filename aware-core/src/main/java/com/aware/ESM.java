@@ -10,6 +10,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
+import android.database.CursorIndexOutOfBoundsException;
 import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -235,6 +236,9 @@ public class ESM extends Aware_Sensor {
     public static final String EXTRA_ANSWER = "answer";
 
     public static final int ESM_NOTIFICATION_ID = 777;
+
+    public static final int SCHEDULER_NOTIFICATION_ID = 666;
+
 
     public static ESMNotificationTimeout esm_notif_expire;
 
@@ -463,16 +467,35 @@ public class ESM extends Aware_Sensor {
      */
     public static void notifyESM(Context context, boolean notifyOnce) {
 
+        String contextString = (String) context.getResources().getText(R.string.aware_esm_questions);
+
+        try {
+            Cursor current_esm = context.getContentResolver().query(ESM_Data.CONTENT_URI, null, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null, ESM_Data.TIMESTAMP + " ASC LIMIT 1");
+            if (current_esm != null && current_esm.moveToFirst()) {
+                JSONObject esm_question = new JSONObject(current_esm.getString(current_esm.getColumnIndex(ESM_Data.JSON)));
+
+                ESMFactory esmFactory = new ESMFactory();
+                ESM_Question esm = esmFactory.getESM(esm_question.getInt(ESM_Question.esm_type), esm_question, current_esm.getInt(current_esm.getColumnIndex(ESM_Data._ID)));
+
+                contextString = esm.getInstructions();
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        } catch (CursorIndexOutOfBoundsException e) {
+            e.printStackTrace();
+        }
+
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context, Aware.AWARE_NOTIFICATION_ID);
         mBuilder.setSmallIcon(R.drawable.ic_stat_aware_esm);
         mBuilder.setContentTitle(context.getResources().getText(R.string.aware_esm_questions_title));
-        mBuilder.setContentText(context.getResources().getText(R.string.aware_esm_questions));
+        mBuilder.setContentText(contextString);
         mBuilder.setNumber(ESM_Queue.getQueueSize(context)); //update the number of ESMs queued
         mBuilder.setOngoing(true); //So it does not get cleared if the user presses clear all notifications.
         mBuilder.setPriority(NotificationCompat.PRIORITY_HIGH);
         mBuilder.setUsesChronometer(true);
         mBuilder.setOnlyAlertOnce(notifyOnce);
         mBuilder.setDefaults(NotificationCompat.DEFAULT_ALL);
+        mBuilder.setStyle(new NotificationCompat.BigTextStyle().bigText(contextString));
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             mBuilder.setChannelId(Aware.AWARE_NOTIFICATION_ID);
@@ -540,6 +563,27 @@ public class ESM extends Aware_Sensor {
 
             return null;
         }
+    }
+
+    public static void NotifyScheduleSetup(Context context, boolean notifyOnce) {
+
+        String contextString = "Study setup completed correctly";
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context, Aware.AWARE_NOTIFICATION_ID);
+        mBuilder.setSmallIcon(R.drawable.ic_stat_aware_esm);
+        mBuilder.setContentText(contextString);
+        mBuilder.setPriority(NotificationCompat.PRIORITY_HIGH);
+        mBuilder.setOnlyAlertOnce(notifyOnce);
+        mBuilder.setDefaults(NotificationCompat.DEFAULT_ALL);
+        mBuilder.setStyle(new NotificationCompat.BigTextStyle().bigText(contextString));
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            mBuilder.setChannelId(Aware.AWARE_NOTIFICATION_ID);
+
+        if (mNotificationManager == null)
+            mNotificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        mNotificationManager.notify(SCHEDULER_NOTIFICATION_ID, mBuilder.build());
     }
 
     @Override
