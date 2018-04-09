@@ -69,7 +69,7 @@ public class ESMScheduler {
                     .addRadio("Strongly Disagree").addRadio("Disagree")
                     .addRadio("Neither Agree nor Disagree").addRadio("Agree").addRadio("Strongly Agree")
                     .setCancelButton("Not Now")
-                    .setNotificationTimeout(900)
+                    .setNotificationTimeout(1200)
                     .setTrigger("EQ");
 
             //add them to the factory
@@ -77,7 +77,7 @@ public class ESMScheduler {
 
             Scheduler.Schedule random = new Scheduler.Schedule(MHQ_ID);
             random.addHour(9).addHour(22)
-                    .random(7,40)
+                    .random(8,40)
                     .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
                     .setActionIntentAction(ESM.ACTION_AWARE_QUEUE_ESM)
                     .addActionExtra(ESM.EXTRA_ESM, factory.build());
@@ -103,7 +103,7 @@ public class ESMScheduler {
                     .addRadio("Strongly Disagree").addRadio("Disagree")
                     .addRadio("Neither Agree nor Disagree").addRadio("Agree").addRadio("Strongly Agree")
                     .setCancelButton("Not Now")
-                    .setNotificationTimeout(900)
+                    .setNotificationTimeout(1200)
                     .setTrigger("CQ");
 
             //add them to the factory
@@ -111,7 +111,7 @@ public class ESMScheduler {
 
             Scheduler.Schedule random = new Scheduler.Schedule(CQ_ID);
             random.addHour(9).addHour(22)
-                    .random(7,40)
+                    .random(8,40)
                     .setActionType(Scheduler.ACTION_TYPE_BROADCAST)
                     .setActionIntentAction(ESM.ACTION_AWARE_QUEUE_ESM)
                     .addActionExtra(ESM.EXTRA_ESM, factory.build());
